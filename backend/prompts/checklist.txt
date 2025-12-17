@@ -1,0 +1,38 @@
+LENGTH OF STAY: 
+[RISK] longer than 5 days
+
+
+NOTES:
+[RISK] Mechanical ventilation 
+[VARIABLE] Sensory deficit
+[VARIABLE] Motor deficit
+[VARIABLE] Developmental delay
+[RISK] DSM-5 CRITERIA INDIVIDUAL
+[RISK] ICD-11 CRITERIA
+[RISK] Post-op state (24 hours) **EPIC ENCOUNTER** **NURSING NOTES**
+[RISK] Explicit mention of delirium
+
+
+MEDICATIONS:
+[RISK] anticholinergics, opioids, benzodiazepines, Aripiprazole
+[TREATMENTS] Haloperidol, Risperidone, Quetiapine, Olanzapine, Aripiprazole, Dexmedetomidine, Clonidine
+[QUESTION] medication combinations 
+[QUESTION] dosage and frequency
+
+
+CAPD:
+[RISK] total score higher than <threshold> 
+[INPUTS] <Sensory deficit> 
+[INPUTS] <Motor deficit>
+[INPUT] <developmental delay> 
+[CONDITIONAL] if <Sensory deficit> OR <Motor deficit> OR <developmental delays> Cut questions 1, 2, 4 7, <threshold> = 6
+[CONDITIONAL] default <threshold> = 9
+
+
+DIAGNOSES:
+[RISK] active infection, sepsis, delirium
+[NEGATIVE] Schizophrenia, psychosis, encephalopathy
+
+
+PATIENT INFORMATION: 
+- [RISK] <2 years old

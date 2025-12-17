@@ -1,0 +1,260 @@
+/* Processing Indicators CSS - Visual feedback for data item processing states */
+
+/* Base processing styles */
+.processing-active {
+  transition: all 0.3s ease-in-out;
+  position: relative;
+  overflow: hidden;
+}
+
+.processing-active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  animation: shimmer 2s infinite;
+  z-index: 1;
+  pointer-events: none;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Processing status specific styles */
+.processing-reading {
+  background-color: #e8f5e8 !important;
+  border-left: 4px solid #4caf50 !important;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
+}
+
+.processing-analyzing {
+  background-color: #e3f2fd !important;
+  border-left: 4px solid #2196f3 !important;
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
+}
+
+.processing-checking {
+  background-color: #fff3e0 !important;
+  border-left: 4px solid #ff9800 !important;
+  box-shadow: 0 2px 8px rgba(255, 152, 0, 0.2);
+}
+
+.processing-processing {
+  background-color: #f3e5f5 !important;
+  border-left: 4px solid #9c27b0 !important;
+  box-shadow: 0 2px 8px rgba(156, 39, 176, 0.2);
+}
+
+/* Table row processing styles */
+.MuiTableRow-root.processing-active {
+  position: relative;
+}
+
+.MuiTableRow-root.processing-active:hover {
+  background-color: inherit !important;
+}
+
+/* Processing indicator badge */
+.processing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: capitalize;
+  animation: pulse 2s infinite;
+}
+
+.processing-badge.reading {
+  background-color: #e8f5e8;
+  color: #2e7d32;
+  border: 1px solid #4caf50;
+}
+
+.processing-badge.analyzing {
+  background-color: #e3f2fd;
+  color: #1565c0;
+  border: 1px solid #2196f3;
+}
+
+.processing-badge.checking {
+  background-color: #fff3e0;
+  color: #ef6c00;
+  border: 1px solid #ff9800;
+}
+
+.processing-badge.processing {
+  background-color: #f3e5f5;
+  color: #7b1fa2;
+  border: 1px solid #9c27b0;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Spinning indicator for active processing */
+.processing-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid;
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 1s linear infinite;
+}
+
+.processing-spinner.reading {
+  border-color: #4caf50;
+  border-top-color: transparent;
+}
+
+.processing-spinner.analyzing {
+  border-color: #2196f3;
+  border-top-color: transparent;
+}
+
+.processing-spinner.checking {
+  border-color: #ff9800;
+  border-top-color: transparent;
+}
+
+.processing-spinner.processing {
+  border-color: #9c27b0;
+  border-top-color: transparent;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Accordion header processing styles */
+.accordion-header-processing {
+  background: linear-gradient(90deg, #e8f5e8 0%, #f1f8e9 100%) !important;
+  border-left: 4px solid #4caf50;
+}
+
+.accordion-header-processing .MuiAccordionSummary-expandIconWrapper {
+  color: #4caf50;
+}
+
+/* Enhanced processing text styles */
+.processing-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: #2e7d32;
+}
+
+.processing-text.analyzing {
+  color: #1565c0;
+}
+
+.processing-text.checking {
+  color: #ef6c00;
+}
+
+.processing-text.processing {
+  color: #7b1fa2;
+}
+
+/* Smooth transitions for state changes */
+.item-state-transition {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Subtle glow effect for active items */
+.processing-active.glow {
+  box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
+}
+
+.processing-active.glow.analyzing {
+  box-shadow: 0 0 20px rgba(33, 150, 243, 0.3);
+}
+
+.processing-active.glow.checking {
+  box-shadow: 0 0 20px rgba(255, 152, 0, 0.3);
+}
+
+.processing-active.glow.processing {
+  box-shadow: 0 0 20px rgba(156, 39, 176, 0.3);
+}
+
+/* Progress bar animation */
+.processing-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #4caf50, #81c784);
+  animation: progress 3s linear infinite;
+}
+
+.processing-progress.analyzing {
+  background: linear-gradient(90deg, #2196f3, #64b5f6);
+}
+
+.processing-progress.checking {
+  background: linear-gradient(90deg, #ff9800, #ffb74d);
+}
+
+.processing-progress.processing {
+  background: linear-gradient(90deg, #9c27b0, #ba68c8);
+}
+
+@keyframes progress {
+  0% { width: 0%; }
+  50% { width: 70%; }
+  100% { width: 100%; }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .processing-badge {
+    font-size: 0.6rem;
+    padding: 2px 6px;
+  }
+  
+  .processing-spinner {
+    width: 10px;
+    height: 10px;
+    border-width: 1.5px;
+  }
+  
+  .processing-active::before {
+    animation-duration: 1.5s;
+  }
+}
+
+/* Dark mode support (if needed in the future) */
+@media (prefers-color-scheme: dark) {
+  .processing-reading {
+    background-color: rgba(76, 175, 80, 0.1) !important;
+  }
+  
+  .processing-analyzing {
+    background-color: rgba(33, 150, 243, 0.1) !important;
+  }
+  
+  .processing-checking {
+    background-color: rgba(255, 152, 0, 0.1) !important;
+  }
+  
+  .processing-processing {
+    background-color: rgba(156, 39, 176, 0.1) !important;
+  }
+}

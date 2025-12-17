@@ -1,0 +1,45 @@
+{
+  "conversation_id": "0937b051-937b-45f9-9800-c7064d83ec3e",
+  "messages": [
+    {
+      "id": "49a20e33-2e37-4b0c-8687-8494bcb2bbad",
+      "type": "user",
+      "content": "I want to make a plan",
+      "timestamp": "2025-11-06T13:23:47.951163"
+    },
+    {
+      "id": "18db4429-5bf7-4cde-a68a-83a201ac3754",
+      "type": "assistant",
+      "content": "Could you specify what kind of plan you'd like to create? For example:\n\n- Is this related to a medical analysis or patient care workflow?\n- Should it address specific patient data, or is it a general-purpose plan?\n- Are there particular goals or outcomes you'd like to achieve with this plan?\n\nLet me know, and I\u2019ll help you organize the steps!",
+      "timestamp": "2025-11-06T13:23:51.682796"
+    },
+    {
+      "id": "843981e5-bcc9-48d2-9e8d-47c43d10ab06",
+      "type": "user",
+      "content": "hello",
+      "timestamp": "2025-11-07T02:41:58.933084"
+    },
+    {
+      "id": "1b65ed80-8a30-42f1-8a03-4dd1e46b595c",
+      "type": "assistant",
+      "content": "Hello! How can I assist you today? Do you need help with planning or anything specific?",
+      "timestamp": "2025-11-07T02:42:01.300245"
+    },
+    {
+      "id": "d48cf911-90ca-4098-8c41-fff0821f1cbf",
+      "type": "user",
+      "content": "what is the first thing I said?",
+      "timestamp": "2025-11-07T02:42:19.139303"
+    },
+    {
+      "id": "2d0f619f-4a25-4c8b-b08b-4c434323438b",
+      "type": "assistant",
+      "content": "You asked, \"what is the first thing I said?\" which is your very first input in this conversation.",
+      "timestamp": "2025-11-07T02:42:20.881469"
+    }
+  ],
+  "last_message_date": "2025-11-07T02:42:20.881594",
+  "created_date": "2025-11-06T13:23:51.683137",
+  "created_by": "sam.osia",
+  "title": "I want to make a plan"
+}

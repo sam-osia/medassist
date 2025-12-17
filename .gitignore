@@ -1,0 +1,21 @@
+# === Global ===
+.DS_Store
+*.log
+*.tmp
+*.swp
+
+# === Python ===
+*.pyc
+*.pyo
+__pycache__/
+*.sqlite3
+
+# === IDEs and tools ===
+.vscode/
+.idea/
+*.code-workspace
+
+analysis_scripts/
+CLAUDE.md
+.claude/
+todos/

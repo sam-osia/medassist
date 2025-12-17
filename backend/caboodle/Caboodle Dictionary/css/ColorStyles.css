@@ -1,0 +1,197 @@
+.base-color, .base-color-on-active:active, .base-color-on-hover:hover, .console-nav, .console-nav-submenu > li a:focus, .console-nav-submenu > li:hover a, .edit-custom-org-filter, .extension-tab.active, .extension-tags, .filter-button 
+{ 
+    color: #FFFFFF !important;
+    background-color: #BD3958 !important;
+    fill: #BD3958 !important;
+} 
+
+
+
+
+.base-color-border, .base-color-border-active:active, .base-color-border-hover:hover, .extension-tab.active 
+{ 
+    border-color: #BD3958 !important;
+} 
+
+
+.add-join-template-button, .console-nav a:focus + ul, .console-nav-groups > li a:focus, .console-nav-groups > li.show a, .console-nav-groups > li:hover ul a, .console-nav-groups > li:not(.selected):hover a, .extensions-navigator-button, .hover-color-always, .hover-color-on-active:active, .hover-color-on-hover:hover, .search-panel, input.dictionary-search 
+{ 
+    background-color: #A2314B;
+    color: #FFFFFF;
+} 
+
+
+.add-join-template-button:hover, .close-icon-link:hover + * + div > input.dictionary-search, .console-nav li.activity-group.selected, .extensions-navigator-button:hover, .nav-accent-always, .nav-accent-on-active:active, .nav-accent-on-hover:hover, .search-icon-link:hover + div > input.dictionary-search, input.dictionary-search:hover 
+{ 
+    background-color: #7A2539 !important;
+    color: #FFFFFF !important;
+} 
+
+
+.close-icon-link:hover + * + div > input.dictionary-search.on-placeholder, .search-icon-link:hover + div > input.dictionary-search.on-placeholder, input.dictionary-search.on-placeholder 
+{ 
+    color: #C9C9C9 !important;
+} 
+
+
+.page-section > .body 
+{ 
+    border-color: #BD3958 !important;
+} 
+
+
+.dialog > header > h1, .extensions-navigator-tag-indicator, .header-text, .page > header > h1, .page-section > header > h1, .page-section > header > h2, .query-tag 
+{ 
+    color: #B13552 !important;
+    fill: #B13552 !important;
+    stroke: #B13552 !important;
+} 
+
+
+.template-tag-ref 
+{ 
+    color: #B13552 !important;
+} 
+
+
+.header-text-hover:hover, .page-section.divot > header:hover h1 
+{ 
+    color: #A2314B !important;
+} 
+
+
+.activity-nav .scrollbar, .activity-nav li:hover:not(.selected), .light-box, .light-box-active:active, .light-box-hover:hover 
+{ 
+    background-color: #E3DEDF !important;
+    color: #000000;
+} 
+
+
+.light-box-fill svg 
+{ 
+    fill: #E3DEDF;
+} 
+
+
+.box-section:not(.error-box):not(.warning-box):not(.info-box) > header, .medium-box, .medium-box-active:active, .medium-box-hover:hover, nav.activity-nav .selected 
+{ 
+    background-color: #DFD9DA !important;
+    color: #000000;
+} 
+
+
+.activity-nav .scrollbar-thumb-display, .caboodle-search-value > .highlight-match, .clarity-search-value > .highlight-match, .search-result-string > .highlight-match, .search-result-string-col-desc > .highlight-match, .search-result-string-column > .highlight-match, .search-result-string-ini > .highlight-match, .search-result-string-source > .highlight-match, .search-result-string-table > .highlight-match, .search-result-string-table-desc > .highlight-match, .strong-box, .strong-box-active:active, .strong-box-hover:hover 
+{ 
+    background-color: #C2AFB3 !important;
+    color: #000000;
+} 
+
+
+.scrollbar-thumb:hover .scrollbar-thumb-display, .stronger-box, .stronger-box-active:active, .stronger-box-hover:hover 
+{ 
+    background-color: #A6858D !important;
+    color: #000000;
+} 
+
+
+.scrollbar-thumb.active .scrollbar-thumb-display, .strongest-box, .strongest-box-active:active, .strongest-box-hover:hover 
+{ 
+    background-color: #895B66 !important;
+    color: #FFFFFF;
+} 
+
+
+.light-box-border, .light-box-border-active:active, .light-box-border-hover:hover 
+{ 
+    border-color: #E3DEDF !important;
+} 
+
+
+.medium-box-border, .medium-box-border-active:active, .medium-box-border-hover:hover 
+{ 
+    border-color: #DFD9DA !important;
+} 
+
+
+.strong-box-border, .strong-box-border-active:active, .strong-box-border-hover:hover 
+{ 
+    border-color: #C2AFB3 !important;
+} 
+
+
+.stronger-box-border, .stronger-box-border-active:active, .stronger-box-border-hover:hover 
+{ 
+    border-color: #A6858D !important;
+} 
+
+
+.strongest-box-border, .strongest-box-border-active:active, .strongest-box-border-hover:hover 
+{ 
+    border-color: #895B66 !important;
+} 
+
+
+.nav-accent-border, .nav-accent-border-active:active, .nav-accent-border-hover:hover 
+{ 
+    border-color: #7A2539 !important;
+} 
+
+
+.system-label > a, .system-label-color 
+{ 
+    border-color: #FFFFFF;
+    color: #FFFFFF !important;
+    background-color: #BD3958 !important;
+} 
+
+
+.page-section > header .divot-marker > svg > polygon 
+{ 
+    fill: #B13552;
+    stroke: #B13552;
+} 
+
+
+.page-section.divot > header:hover .divot-marker > svg > polygon 
+{ 
+    fill: #A2314B;
+    stroke: #A2314B;
+} 
+
+
+.expandable-paragraph > .divot-marker:hover > svg > polygon, .form-divot .divot-marker:hover > svg > polygon, .inner-section > header:hover .divot-marker > svg > polygon, .outer-section > header:hover .divot-marker > svg > polygon, details > summary:hover > .details-marker > svg > polygon 
+{ 
+    stroke: #BD3958;
+} 
+
+
+.expandable-paragraph > .divot-marker > svg > polygon, .form-divot .divot-marker > svg > polygon, .inner-section > header .divot-marker > svg > polygon, .outer-section > header .divot-marker > svg > polygon, details > summary > .details-marker > svg > polygon 
+{ 
+    stroke: #A6858D;
+} 
+
+
+#SearchButton:hover > svg > path, .close-icon > svg > polygon, .search-icon > svg > path 
+{ 
+    fill: #FFFFFF;
+} 
+
+
+.logo-inner > svg, .logo-inner > svg > polygon 
+{ 
+    fill: #FFFFFF;
+} 
+
+
+.secondary-text 
+{ 
+    color: #595959;
+} 
+
+
+.custom-org-filter-sql, .edit-extension-sql, .extend-query .tooltip-wrapper, body 
+{ 
+    background-color: #E3DEDF !important;
+} 
+
+

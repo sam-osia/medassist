@@ -1,0 +1,30 @@
+icd-10 criteria:
+impairment of consciousness and attention (on a continuum from clouding to coma; reduced ability to direct, focus, sustain, and shift attention); 
+global disturbance of cognition (perceptual distortions, illusions and hallucinations - most often visual; impairment of abstract thinking and comprehension, with or without transient delusions, but typically with some degree of incoherence; impairment of immediate recall and of recent memory but with relatively intact remote memory; disorientation for time as well as, in more severe cases, for place and person); 
+psychomotor disturbances (hypo- or hyperactivity and unpredictable shifts from one to the other; increased reaction time; increased or decreased flow of speech; enhanced startle reaction); 
+disturbance of the sleep-wake cycle (insomnia or, in severe cases, total sleep loss or reversal of the sleep-wake cycle; daytime drowsiness; nocturnal worsening of symptoms; disturbing dreams or nightmares, which may continue as hallucinations after awakening); 
+emotional disturbances, e.g. depression, anxiety or fear, irritability, euphoria, apathy,or wondering perplexity.
+
+
+icd-11 criteria:
+A disturbance of attention, orientation, and awareness developing within a short period of time (e.g., within hours or days), typically presenting as significant confusion or global neurocognitive impairment with transient symptoms that may fluctuate depending on the underlying causal condition or etiology. 
+The disturbance represents a change from the individual’s baseline functioning. 
+Delirium may be caused by the direct physiological effects of a medical condition not classified under Mental, Behavioural or Neurodevelopmental Disorders, by the direct physiological effects of a substance or medication, including withdrawal, or by multiple or unknown etiological factors. 
+The symptoms are not better accounted for by a pre-existing or evolving Neurocognitive Disorder (i.e., Amnestic Disorder, Mild Neurocognitive Disorder, or Dementia) or by another mental disorder (e.g., Schizophrenia or Other Primary Psychotic Disorder, a Mood Disorder, Post-Traumatic Stress Disorder, a Dissociative Disorder). 
+The symptoms are not better accounted for by a typical syndrome of Substance Intoxication or Substance Withdrawal for a substance or medication that is known to be present, although Delirium can occur as a complication of intoxication or withdrawal states (see Delirium Due to Psychoactive Substances Including Medications, below). 
+
+
+dsm-5 criteria:
+A disturbance in attention (i.e., reduced ability to direct, focus, sustain, and shift attention) and awareness (reduced orientation to the environment). 
+The disturbance develops over a short period of time (usually hours to a few days), represents a change from baseline attention and awareness, and tends to fluctuate in severity during the course of a day. 
+An additional disturbance in cognition (e.g., memory deficit, disorientation, language, visuospatial ability, or perception). 
+The disturbances in Criteria A and C are not better explained by another pre-existing, established, or evolving neurocognitive disorder and do not occur in the context of a severely reduced level of arousal, such as coma. 
+There is evidence from the history, physical examination, or laboratory findings that the disturbance is a direct physiological consequence of another medical condition, substance intoxication or withdrawal (i.e., due to a drug of abuse or to a medication), or exposure to a toxin, or is due to multiple etiologies. 
+
+
+Sensory or motor deficits:
+CAPD questions 1, 2, 4, 7 will be inaccurate 
+
+
+remove above question, use cutoff of 6 for developmental delays
+use cutoff of 5 for typically developing children 

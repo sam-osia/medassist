@@ -1,0 +1,996 @@
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+  Container,
+  Typography,
+  Box,
+  CircularProgress,
+  Alert,
+  Button,
+  Paper,
+  Grid,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  FormControl,
+  FormLabel,
+  Tabs,
+  Tab
+} from '@mui/material';
+import {
+  ArrowBack as ArrowBackIcon,
+  Person as PersonIcon,
+  Forum as ForumIcon,
+  Minimize as MinimizeIcon,
+  PlaylistAddCheck as ProcessIcon,
+  HighlightAlt as AnnotationsIcon
+} from '@mui/icons-material';
+import { datasetsService, workflowService } from '../services/ApiService';
+import EncounterCard from '../components/UI/PatientsChart/EncounterCard';
+import DiagnosisComponent from '../components/UI/SinglePatient/DiagnosisComponent';
+import MedicationsComponent from '../components/UI/SinglePatient/MedicationsComponent';
+import NotesComponent from '../components/UI/SinglePatient/NotesComponent';
+import FlowsheetsComponent from '../components/UI/SinglePatient/FlowsheetsComponent';
+import FlowsheetsInstanceComponent from '../components/UI/SinglePatient/FlowsheetsInstanceComponent';
+import ResultsComponent from '../components/UI/SinglePatient/ResultsComponent';
+import ProcessComponent from '../components/UI/Process/ProcessComponent';
+import AnnotationsComponent from '../components/Annotations/AnnotationsComponent';
+import ChatComponent from '../components/UI/Chat/ChatComponent';
+import BreadcrumbNav from '../components/UI/Common/BreadcrumbNav';
+import { ProcessingProvider } from '../contexts/ProcessingContext';
+import { useTheme } from '@mui/material/styles';
+import { getPageGradient } from '../App';
+
+const SinglePatientPage = () => {
+  const theme = useTheme();
+  const { datasetName, mrn, projectName } = useParams();
+  const navigate = useNavigate();
+  const [patientData, setPatientData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [selectedCSN, setSelectedCSN] = useState('');
+  const [chatWidth, setChatWidth] = useState(400);
+  const [chatCollapsed, setChatCollapsed] = useState(true);
+  const [isResizing, setIsResizing] = useState(false);
+  const [workflowResults, setWorkflowResults] = useState(null);
+  const [activeTab, setActiveTab] = useState(0);
+  const [activeSidebarPanel, setActiveSidebarPanel] = useState('process');
+  const [patientExperiments, setPatientExperiments] = useState([]);
+
+
+  // Decode dataset name for API calls
+  const decodedDatasetName = datasetName ? decodeURIComponent(datasetName) : 'SickKids ICU';
+
+  useEffect(() => {
+    fetchPatientDetails();
+  }, [mrn, datasetName]);
+
+  useEffect(() => {
+    if (patientData) {
+      console.log('Patient data updated:', {
+        hasSummary: !!patientData.summary,
+        summaryEncounters: patientData.summary?.encounters?.length,
+        actualEncounters: patientData.encounters?.length
+      });
+    }
+  }, [patientData]);
+
+  useEffect(() => {
+    // Set the first encounter as selected when patient data loads
+    if (patientData?.encounters?.length > 0 && !selectedCSN) {
+      setSelectedCSN(patientData.encounters[0].csn.toString());
+    }
+  }, [patientData, selectedCSN]);
+
+  useEffect(() => {
+    // Fetch patient experiments when CSN changes (only if viewing through project context)
+    if (projectName && selectedCSN && patientData?.mrn) {
+      fetchPatientExperiments();
+    }
+  }, [selectedCSN, patientData?.mrn, projectName]);
+
+  useEffect(() => {
+    // Listen for workflow completion events
+    const handleWorkflowComplete = (event) => {
+      if (event.detail && event.detail.type === 'workflow_complete') {
+        setWorkflowResults(event.detail.results);
+      }
+    };
+
+    window.addEventListener('workflowComplete', handleWorkflowComplete);
+    return () => {
+      window.removeEventListener('workflowComplete', handleWorkflowComplete);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (isResizing) {
+        const newWidth = window.innerWidth - e.clientX;
+        const constrainedWidth = Math.min(Math.max(newWidth, 300), window.innerWidth * 0.6);
+        setChatWidth(constrainedWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
+  const handleResizeStart = (e) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  const toggleChatCollapse = () => {
+    setChatCollapsed(prev => !prev);
+  };
+
+  const handleSidebarPanelChange = (panel) => {
+    if (activeSidebarPanel === panel && !chatCollapsed) {
+      setChatCollapsed(true);
+    } else {
+      setActiveSidebarPanel(panel);
+      setChatCollapsed(false);
+    }
+  };
+
+  const fetchPatientDetails = async () => {
+    try {
+      setLoading(true);
+      const response = await datasetsService.getPatientDetails(decodedDatasetName, mrn);
+
+      const data = response.data;
+      setPatientData(data);
+      console.log(data);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching patient details:', err);
+      const errorMessage = err.response?.data?.detail || err.message || 'Unknown error occurred';
+      setError(`Failed to load patient details: ${errorMessage}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchPatientExperiments = async () => {
+    try {
+      if (projectName) {
+        // Use project-scoped API when viewing through project context
+        const response = await workflowService.getPatientExperimentsForProject(projectName, patientData.mrn);
+        setPatientExperiments(response.data.experiments || []);
+      } else {
+        // Fallback (shouldn't happen since we only call this if projectName exists)
+        setPatientExperiments([]);
+      }
+    } catch (err) {
+      console.error('Error fetching patient experiments:', err);
+      // Don't show error to user, just log it - experiments are optional
+      setPatientExperiments([]);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleDateString();
+    } catch {
+      return dateString;
+    }
+  };
+
+  // Helper function to extract highlighted item IDs from workflow results
+  const getHighlightedItems = (dataType) => {
+    if (!workflowResults || !workflowResults.flags) return [];
+    
+    const highlightedIds = [];
+    Object.values(workflowResults.flags).forEach(flagData => {
+      if (flagData.sources) {
+        flagData.sources.forEach(source => {
+          if (source.type === dataType && source.details) {
+            if (dataType === 'diagnosis') {
+              highlightedIds.push(source.details.diagnosis_id);
+            } else if (dataType === 'medications') {
+              highlightedIds.push(source.details.order_id);
+            } else if (dataType === 'note') {
+              highlightedIds.push(source.details.note_id);
+            } else if (dataType === 'flowsheet') {
+              // For flowsheets, we'll add a string identifier for CAPD measurements
+              highlightedIds.push('capd_measurements');
+            }
+          }
+        });
+      }
+    });
+    return [...new Set(highlightedIds)]; // Remove duplicates
+  };
+
+  const handleGoBack = () => {
+    if (projectName) {
+      navigate(`/projects/${projectName}`);
+    } else {
+      const encodedDataset = encodeURIComponent(decodedDatasetName);
+      navigate(`/datasets/${encodedDataset}/patients`);
+    }
+  };
+
+  const handleCSNChange = (event) => {
+    setSelectedCSN(event.target.value);
+  };
+
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+  };
+
+  const selectedEncounter = patientData?.encounters?.find(
+    enc => enc.csn.toString() === selectedCSN
+  );
+
+  const getBreadcrumbs = () => {
+    const breadcrumbs = [];
+
+    if (projectName) {
+      // Via projects path
+      breadcrumbs.push({ label: 'Projects', path: '/projects' });
+      breadcrumbs.push({ label: projectName, path: `/projects/${projectName}` });
+      breadcrumbs.push({ label: decodedDatasetName });
+      breadcrumbs.push({ label: `MRN: ${mrn}` });
+    } else {
+      // Via datasets path
+      breadcrumbs.push({ label: 'Datasets', path: '/datasets' });
+      const encodedDataset = encodeURIComponent(decodedDatasetName);
+      breadcrumbs.push({ label: decodedDatasetName, path: `/datasets/${encodedDataset}/patients` });
+      breadcrumbs.push({ label: `MRN: ${mrn}` });
+    }
+
+    return breadcrumbs;
+  };
+
+  const getEncounterSummary = (encounterCSN) => {
+    if (!patientData?.summary?.encounters) {
+      console.log('No summary encounters found in:', patientData?.summary);
+      return null;
+    }
+    
+    const summary = patientData.summary.encounters.find(
+      enc => enc.csn.toString() === encounterCSN.toString()
+    );
+    
+    if (!summary) {
+      console.log('No summary found for CSN:', encounterCSN);
+      console.log('Available summaries:', patientData.summary.encounters);
+    }
+    
+    return summary;
+  };
+
+  // Function to reformat flowsheets pivot data to instance format
+  const reformatFlowsheetsForAnalysis = (flowsheetsPivot) => {
+    if (!flowsheetsPivot || !flowsheetsPivot.measurements) {
+      return [];
+    }
+
+    // Collect all unique timestamps across all measurements
+    const allTimestamps = new Set();
+    flowsheetsPivot.measurements.forEach(measurement => {
+      Object.keys(measurement.time_values || {}).forEach(timestamp => {
+        allTimestamps.add(timestamp);
+      });
+    });
+
+    // Sort timestamps chronologically
+    const sortedTimestamps = Array.from(allTimestamps).sort();
+
+    const flowsheetInstances = [];
+
+    sortedTimestamps.forEach(timestamp => {
+      const instance = {
+        timestamp: timestamp,
+        measurements: {}
+      };
+
+      // Collect measurements for this timestamp
+      flowsheetsPivot.measurements.forEach(measurement => {
+        const timeValues = measurement.time_values || {};
+        if (timeValues[timestamp]) {
+          const measName = measurement.flo_meas_name || '';
+          const measurementKey = measName.toLowerCase().replace(' ', '_');
+
+          instance.measurements[measurementKey] = {
+            flo_meas_id: measurement.flo_meas_id,
+            flo_meas_name: measName,
+            disp_name: measurement.disp_name,
+            value: timeValues[timestamp].value,
+            comment: timeValues[timestamp].comment
+          };
+        }
+      });
+
+      flowsheetInstances.push(instance);
+    });
+
+    return flowsheetInstances;
+  };
+
+  if (loading) {
+    return (
+      <ProcessingProvider>
+        <Box sx={{ 
+          display: 'flex', 
+          height: 'calc(100vh - 80px)', // Subtract navbar height
+          overflow: 'hidden',
+          background: getPageGradient(theme)
+        }}>
+          {/* Main Content - Left Side */}
+          <Box sx={{ 
+            flex: 1,
+            height: 'calc(100vh - 80px)', // Subtract navbar height
+            overflowY: 'auto',
+            padding: 4
+          }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <CircularProgress size={60} />
+              <Typography variant="h6" sx={{ mt: 2 }}>
+                Loading patient details...
+              </Typography>
+            </Box>
+          </Box>
+          
+          {/* Sidebar with Chat - Right Side */}
+          <Box sx={{ 
+            width: `${chatCollapsed ? 60 : chatWidth + 60}px`,
+            height: 'calc(100vh - 80px)', // Subtract navbar height
+            display: 'flex',
+            transition: 'width 0.3s ease'
+          }}>
+            {/* Chat Panel */}
+            <Box sx={{ 
+              width: `${chatCollapsed ? 0 : chatWidth}px`,
+              borderLeft: '1px solid #e0e0e0',
+              overflow: 'hidden',
+              transition: 'width 0.3s ease'
+            }}>
+              <ChatComponent collapsed={chatCollapsed} onToggleCollapse={toggleChatCollapse} />
+            </Box>
+            
+            {/* Permanent Thin Sidebar */}
+            <Box sx={{ 
+              width: '60px',
+              backgroundColor: 'surface.main',
+              borderLeft: '1px solid #e0e0e0',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              paddingTop: 2,
+              gap: 1
+            }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 1,
+                  cursor: 'pointer',
+                  padding: 1,
+                  borderRadius: 1,
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    backgroundColor: 'surface.tab'
+                  }
+                }}
+              >
+                <ProcessIcon 
+                  sx={{ 
+                    color: 'text.secondary',
+                    fontSize: 24 
+                  }} 
+                />
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontSize: '0.65rem',
+                    fontWeight: 500,
+                    color: 'text.secondary'
+                  }}
+                >
+                  Process
+                </Typography>
+              </Box>
+              
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 1,
+                  cursor: 'pointer',
+                  padding: 1,
+                  borderRadius: 1,
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    backgroundColor: 'surface.tab'
+                  }
+                }}
+                onClick={toggleChatCollapse}
+              >
+                <ForumIcon
+                  sx={{
+                    color: chatCollapsed ? 'text.secondary' : 'icon.main',
+                    fontSize: 24
+                  }}
+                />
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontSize: '0.65rem',
+                    fontWeight: 500,
+                    color: chatCollapsed ? 'text.secondary' : 'icon.main'
+                  }}
+                >
+                  Chat
+                </Typography>
+              </Box>
+              
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 1,
+                  cursor: 'pointer',
+                  padding: 1,
+                  borderRadius: 1,
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    backgroundColor: 'surface.tab'
+                  }
+                }}
+              >
+                <AnnotationsIcon 
+                  sx={{ 
+                    color: 'text.secondary',
+                    fontSize: 24 
+                  }} 
+                />
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontSize: '0.65rem',
+                    fontWeight: 500,
+                    color: 'text.secondary'
+                  }}
+                >
+                  Annotations
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+      </ProcessingProvider>
+    );
+  }
+
+  if (error) {
+    return (
+      <ProcessingProvider>
+        <Box sx={{ 
+          display: 'flex', 
+          height: 'calc(100vh - 80px)', // Subtract navbar height
+          overflow: 'hidden',
+          background: getPageGradient(theme)
+        }}>
+          {/* Main Content - Left Side */}
+          <Box sx={{ 
+            flex: 1,
+            height: 'calc(100vh - 80px)', // Subtract navbar height
+            overflowY: 'auto',
+            padding: 4
+          }}>
+            <Button
+              startIcon={<ArrowBackIcon />}
+              onClick={handleGoBack}
+              sx={{ mb: 2 }}
+            >
+              Back to Patients
+            </Button>
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          </Box>
+          
+          {/* Sidebar with Chat - Right Side */}
+          <Box sx={{ 
+            width: `${chatCollapsed ? 60 : chatWidth + 60}px`,
+            height: 'calc(100vh - 80px)', // Subtract navbar height
+            display: 'flex',
+            transition: 'width 0.3s ease'
+          }}>
+            {/* Chat Panel */}
+            <Box sx={{ 
+              width: `${chatCollapsed ? 0 : chatWidth}px`,
+              borderLeft: '1px solid #e0e0e0',
+              overflow: 'hidden',
+              transition: 'width 0.3s ease'
+            }}>
+              <ChatComponent collapsed={chatCollapsed} onToggleCollapse={toggleChatCollapse} />
+            </Box>
+            
+            {/* Permanent Thin Sidebar */}
+            <Box sx={{ 
+              width: '60px',
+              backgroundColor: 'surface.main',
+              borderLeft: '1px solid #e0e0e0',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              paddingTop: 2,
+              gap: 1
+            }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 1,
+                  cursor: 'pointer',
+                  padding: 1,
+                  borderRadius: 1,
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    backgroundColor: 'surface.tab'
+                  }
+                }}
+              >
+                <ProcessIcon 
+                  sx={{ 
+                    color: 'text.secondary',
+                    fontSize: 24 
+                  }} 
+                />
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontSize: '0.65rem',
+                    fontWeight: 500,
+                    color: 'text.secondary'
+                  }}
+                >
+                  Process
+                </Typography>
+              </Box>
+              
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 1,
+                  cursor: 'pointer',
+                  padding: 1,
+                  borderRadius: 1,
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    backgroundColor: 'surface.tab'
+                  }
+                }}
+                onClick={toggleChatCollapse}
+              >
+                <ForumIcon
+                  sx={{
+                    color: chatCollapsed ? 'text.secondary' : 'icon.main',
+                    fontSize: 24
+                  }}
+                />
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontSize: '0.65rem',
+                    fontWeight: 500,
+                    color: chatCollapsed ? 'text.secondary' : 'icon.main'
+                  }}
+                >
+                  Chat
+                </Typography>
+              </Box>
+              
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 1,
+                  cursor: 'pointer',
+                  padding: 1,
+                  borderRadius: 1,
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    backgroundColor: 'surface.tab'
+                  }
+                }}
+              >
+                <AnnotationsIcon 
+                  sx={{ 
+                    color: 'text.secondary',
+                    fontSize: 24 
+                  }} 
+                />
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontSize: '0.65rem',
+                    fontWeight: 500,
+                    color: 'text.secondary'
+                  }}
+                >
+                  Annotations
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+      </ProcessingProvider>
+    );
+  }
+
+  return (
+    <ProcessingProvider>
+      <Box sx={{ 
+        display: 'flex', 
+        height: 'calc(100vh - 80px)', // Subtract navbar height
+        overflow: 'hidden',
+        position: 'relative',
+        userSelect: isResizing ? 'none' : 'auto',
+        background: getPageGradient(theme)
+      }}>
+        {/* Main Content - Left Side */}
+        <Box sx={{ 
+          flex: 1,
+          height: 'calc(100vh - 80px)', // Subtract navbar height
+          overflowY: 'auto',
+          padding: 4
+        }}>
+          {/* Breadcrumbs */}
+          <BreadcrumbNav breadcrumbs={getBreadcrumbs()} />
+
+          {/* Header */}
+          <Box sx={{ mb: 3 }}>
+            {/* Patient Information & Encounter Selection Card */}
+            <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
+              {/* Patient Header */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+                <PersonIcon color="primary" sx={{ fontSize: 40 }} />
+                <Box>
+                  <Typography variant="h4" component="h1">
+                    Patient MRN: {patientData?.mrn}
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* Patient Demographics */}
+              <Grid container spacing={2} sx={{ mb: 4 }}>
+                <Grid item xs={12} sm={4}>
+                  <Typography variant="body1">
+                    <strong>Sex:</strong> {patientData?.sex || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Typography variant="body1">
+                    <strong>Date of Birth:</strong> {formatDate(patientData?.date_of_birth)}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Typography variant="body1">
+                    <strong>Total Encounters:</strong> {patientData?.encounters?.length || 0}
+                  </Typography>
+                </Grid>
+              </Grid>
+
+              {/* Encounter Selection Section */}
+              <Box>
+                
+                <FormControl component="fieldset" sx={{ width: '100%' }}>
+                  <FormLabel component="legend" sx={{ mb: 2 }}>
+                    Available Encounters:
+                  </FormLabel>
+                  <RadioGroup
+                    value={selectedCSN}
+                    onChange={handleCSNChange}
+                    sx={{ gap: 2 }}
+                  >
+                    {patientData?.encounters?.map((encounter) => {
+                      console.log('Rendering encounter:', encounter.csn);
+                      const encounterSummary = getEncounterSummary(encounter.csn);
+                      return (
+                        <FormControlLabel
+                          key={encounter.csn}
+                          value={encounter.csn.toString()}
+                          control={<Radio />}
+                          label={
+                            <Box sx={{ ml: 1, width: '100%', flex: 1 }}>
+                              <EncounterCard 
+                                encounter={encounter}
+                                metrics={encounterSummary?.metrics}
+                                patientMrn={patientData.mrn}
+                                hideViewButton={true}
+                              />
+                            </Box>
+                          }
+                          sx={{ 
+                            alignItems: 'flex-start',
+                            margin: 0,
+                            width: '100%',
+                            '& .MuiFormControlLabel-label': {
+                              width: '100%'
+                            }
+                          }}
+                        />
+                      );
+                    })}
+                  </RadioGroup>
+                </FormControl>
+              </Box>
+            </Paper>
+          </Box>
+
+          {/* Data Components - Tabbed View */}
+          {selectedEncounter && (
+            <Paper elevation={2} sx={{ mb: 3 }}>
+              <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                <Tabs value={activeTab} onChange={handleTabChange}>
+                  {projectName && <Tab label="Workflow Results" />}
+                  <Tab label="Notes" />
+                  <Tab label="Medications" />
+                  <Tab label="Flowsheets" />
+                  <Tab label="Diagnoses" />
+                </Tabs>
+              </Box>
+
+              <Box sx={{ p: 2 }}>
+                {/* Workflow Results Tab (only shown when viewing through project) */}
+                {projectName && activeTab === 0 && (
+                  <ResultsComponent
+                    workflowResults={workflowResults}
+                    mrn={patientData?.mrn}
+                    csn={selectedCSN}
+                    patientExperiments={patientExperiments}
+                  />
+                )}
+
+                {/* Notes Tab */}
+                {activeTab === (projectName ? 1 : 0) && (
+                  <NotesComponent
+                    notes={selectedEncounter?.notes || []}
+                    mrn={patientData?.mrn}
+                    csn={selectedCSN}
+                    highlightedItems={getHighlightedItems('note')}
+                  />
+                )}
+
+                {/* Medications Tab */}
+                {activeTab === (projectName ? 2 : 1) && (
+                  <MedicationsComponent
+                    medications={selectedEncounter?.medications || []}
+                    mrn={patientData?.mrn}
+                    csn={selectedCSN}
+                    highlightedItems={getHighlightedItems('medications')}
+                  />
+                )}
+
+                {/* Flowsheets Tab */}
+                {activeTab === (projectName ? 3 : 2) && (
+                  <FlowsheetsInstanceComponent
+                    flowsheet_instances={reformatFlowsheetsForAnalysis(selectedEncounter?.flowsheets_pivot)}
+                    mrn={patientData?.mrn}
+                    csn={selectedCSN}
+                    highlightedItems={getHighlightedItems('flowsheet')}
+                  />
+                )}
+
+                {/* Diagnoses Tab */}
+                {activeTab === (projectName ? 4 : 3) && (
+                  <DiagnosisComponent
+                    diagnoses={selectedEncounter?.diagnoses || []}
+                    mrn={patientData?.mrn}
+                    csn={selectedCSN}
+                    highlightedItems={getHighlightedItems('diagnosis')}
+                  />
+                )}
+              </Box>
+            </Paper>
+          )}
+
+          {!selectedEncounter && selectedCSN && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              No data found for the selected encounter.
+            </Alert>
+          )}
+        </Box>
+        
+        {/* Resize Handle */}
+        {!chatCollapsed && (
+          <Box
+            sx={{
+              position: 'absolute',
+              right: `${chatWidth + 60}px`, // Account for the 60px sidebar
+              top: 0,
+              bottom: 0,
+              width: '4px',
+              backgroundColor: 'transparent',
+              cursor: 'col-resize',
+              '&:hover': {
+                backgroundColor: 'primary.main',
+                opacity: 0.2,
+              },
+              '&:active': {
+                backgroundColor: 'primary.main',
+                opacity: 0.4,
+              }
+            }}
+            onMouseDown={handleResizeStart}
+          />
+        )}
+        
+        {/* Sidebar with Chat - Right Side */}
+        <Box sx={{ 
+          width: `${chatCollapsed ? 60 : chatWidth + 60}px`,
+          height: 'calc(100vh - 80px)', // Subtract navbar height
+          display: 'flex',
+          transition: 'width 0.3s ease'
+        }}>
+          {/* Panel Content */}
+          <Box sx={{ 
+            width: `${chatCollapsed ? 0 : chatWidth}px`,
+            borderLeft: '1px solid #e0e0e0',
+            overflow: 'hidden',
+            transition: 'width 0.3s ease'
+          }}>
+            {activeSidebarPanel === 'chat' && (
+              <ChatComponent 
+                mrn={patientData?.mrn} 
+                csn={selectedCSN}
+                collapsed={chatCollapsed}
+                onToggleCollapse={toggleChatCollapse}
+              />
+            )}
+            {activeSidebarPanel === 'process' && (
+              <ProcessComponent 
+                mrn={patientData?.mrn}
+                csn={selectedCSN}
+                patientExperiments={patientExperiments}
+              />
+            )}
+            {activeSidebarPanel === 'annotations' && (
+              <AnnotationsComponent />
+            )}
+          </Box>
+          
+          {/* Permanent Thin Sidebar */}
+          <Box sx={{ 
+            width: '60px',
+            backgroundColor: 'surface.main',
+            borderLeft: '1px solid #e0e0e0',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            paddingTop: 2,
+            gap: 1
+          }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 1,
+                cursor: 'pointer',
+                padding: 1,
+                borderRadius: 1,
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  backgroundColor: 'surface.tab'
+                }
+              }}
+              onClick={() => handleSidebarPanelChange('process')}
+            >
+              <ProcessIcon
+                sx={{
+                  color: activeSidebarPanel === 'process' && !chatCollapsed ? 'icon.main' : 'text.secondary',
+                  fontSize: 24
+                }}
+              />
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: '0.65rem',
+                  fontWeight: 500,
+                  color: activeSidebarPanel === 'process' && !chatCollapsed ? 'icon.main' : 'text.secondary'
+                }}
+              >
+                Process
+              </Typography>
+            </Box>
+            
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 1,
+                cursor: 'pointer',
+                padding: 1,
+                borderRadius: 1,
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  backgroundColor: 'surface.tab'
+                }
+              }}
+              onClick={() => handleSidebarPanelChange('chat')}
+            >
+              <ForumIcon
+                sx={{
+                  color: activeSidebarPanel === 'chat' && !chatCollapsed ? 'icon.main' : 'text.secondary',
+                  fontSize: 24
+                }}
+              />
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: '0.65rem',
+                  fontWeight: 500,
+                  color: activeSidebarPanel === 'chat' && !chatCollapsed ? 'icon.main' : 'text.secondary'
+                }}
+              >
+                Chat
+              </Typography>
+            </Box>
+            
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 1,
+                cursor: 'pointer',
+                padding: 1,
+                borderRadius: 1,
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  backgroundColor: 'surface.tab'
+                }
+              }}
+              onClick={() => handleSidebarPanelChange('annotations')}
+            >
+              <AnnotationsIcon
+                sx={{
+                  color: activeSidebarPanel === 'annotations' && !chatCollapsed ? 'icon.main' : 'text.secondary',
+                  fontSize: 24
+                }}
+              />
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: '0.65rem',
+                  fontWeight: 500,
+                  color: activeSidebarPanel === 'annotations' && !chatCollapsed ? 'icon.main' : 'text.secondary'
+                }}
+              >
+                Annotations
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
+      </Box>
+    </ProcessingProvider>
+  );
+};
+
+export default SinglePatientPage;

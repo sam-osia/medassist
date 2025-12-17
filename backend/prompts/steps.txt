@@ -1,0 +1,107 @@
+**Phase 1: Data Collection & Preparation**
+
+1.  **Gather Relevant Data:**
+    *   **Clinical Notes:**  Obtain all available clinical notes for the patient, including:
+        *   Admit notes.
+        *   Daily progress notes.
+        *   Shift reports.
+        *   Consultation notes (e.g., from the attending physician, nurses, respiratory therapist, etc.).
+        *   Orders and responses.
+        *   Any notes related to the patient's presentation upon arrival and their condition during their stay.
+    *   **CAPD (Computerized Physician Order Entry):**  Access the patient's CAPD records. This includes:
+        *   Medication orders.
+        *   Dosage and frequency of medications.
+        *   Order responses (e.g., if a medication was administered).
+        *   Any relevant lab orders.
+    *   **Medications:**  Obtain a complete list of the patient's current medications, including:
+        *   Drug name.
+        *   Dosage.
+        *   Route.
+        *   Frequency.
+        *   Start and stop dates (if applicable).
+    *   **Flowsheets:**  Review relevant flowsheets, such as:
+        *   Vital Signs (temperature, pulse, respiration, blood pressure, oxygen saturation).
+        *   Pain Assessment.
+        *   Sedation Levels (if applicable, using scales like Ramsay or Sedation Alertness Scale).
+        *   Behavioral Observations.
+        *   Falls/Assisted Transfers.
+        *   Oxygen Administration.
+        *   Respiratory Support (e.g., ventilator settings).
+        *   Blood Glucose.
+        *   Labs (CBC, CMP, coagulation studies, electrolytes, etc.)
+        *   Any other flowsheets pertinent to the patient's condition.
+
+2.  **Organize and Standardize Data:**
+    *   **Create a Structured Format:**  Develop a consistent format to record the data.  This could be a spreadsheet or a dedicated delirium screening tool that pulls data directly from the systems.
+    *   **Standardize Terminology:**  Use consistent terminology for diagnoses, medications, and symptoms. For example, use the same term for "agitation" throughout the records.
+    *   **Patient Identification:**  Ensure each record is clearly linked to the correct patient by using their Medical Record Number (MRN) or other unique identifier.
+
+**Phase 2:  Delirium Screening & Assessment**
+
+3.  **Identify Potential Delirium Signs and Symptoms:**  Based on the collected data, systematically look for signs and symptoms of delirium. I will use standardized tools like the Confusion Assessment Method (CAM) or the Delirium Rating Scale (DRS) as a guide. I will specifically look for the following:
+    *   **Cognitive Changes:**
+        *   **Amnesia:**  Difficulty remembering recent events (e.g., disorientation to time, place, or person).
+        *   **Altered Level of Consciousness:**  Changes in alertness, responsiveness, or orientation.  (Examples: lethargy, drowsiness, confusion, restlessness).
+        *   **Disorganized Thinking:**  Incoherent speech, tangential thoughts, or difficulty following commands.
+        *   **Impaired Attention:**  Difficulty focusing or sustaining attention.
+        *   **Slowed Processing Speed:**  Taking longer to respond to questions or complete tasks.
+        *   **Perceptual Disturbances:** Hallucinations (seeing or hearing things that are not there), illusions (misinterpreting real stimuli), or delusions (false beliefs).
+    *   **Behavioral Changes:**
+        *   **Agitation:** Restlessness, irritability, or difficulty being comforted.
+        *   **Lethargy:**  Reduced activity and responsiveness.
+        *   **Changes in Sleep-Wake Cycle:**  Disrupted sleep patterns (e.g., insomnia, excessive daytime sleepiness).
+        *   **Changes in Appetite or Thirst:**  Decreased food or fluid intake.
+        *   **Changes in Motor Behavior:**  Restlessness, pacing, or repetitive movements.
+        *   **Withdrawal:**  Social isolation or decreased interaction.
+        *   **Aggression:**  Verbal or physical aggression.
+    *   **Evidence of a Medical/Surgical Cause:**
+        *   **Infection:** Fever, elevated white blood cell count, or other signs of infection.
+        *   **Metabolic Disturbances:** Abnormal blood glucose levels, electrolyte imbalances, or kidney dysfunction.
+        *   **Medication Side Effects:**  Potential side effects of medications, especially sedatives, analgesics, or anticholinergics.
+        *   **Underlying Medical Conditions:**  Conditions such as stroke, heart failure, or respiratory failure.
+
+4.  **Apply Delirium Screening Tools:**
+    *   **Confusion Assessment Method (CAM):**  The CAM is a validated tool specifically designed for detecting delirium. It involves assessing orientation, attention, and cognition. I would look for a score of 2 or more on the CAM total score to indicate potential delirium.  Specific CAM scores for orientation, attention, and cognition would also be evaluated.
+    *   **Delirium Rating Scale (DRS):**  The DRS is a more comprehensive scale that assesses various aspects of delirium, including alertness, cognition, behavior, and functional status. It's often used in research settings.
+    *   **Other Screening Tools:**  Depending on the patient's age and presentation, other tools may be appropriate, such as the Cornell Delirium Screening Scale (CDSS) or the Delirium Observation Checklist (DOC).
+
+5.  **Analyze Data and Identify Patterns:**
+    *   **Look for Clusters of Symptoms:**  Note if a patient exhibits multiple signs and symptoms suggestive of delirium.
+    *   **Assess Temporal Relationship:**  Determine if the symptoms appeared suddenly or gradually.  Sudden onset is more characteristic of delirium.
+    *   **Consider Potential Triggers:**  Identify any potential triggers for delirium, such as infection, medication changes, or metabolic disturbances.
+    *   **Review Medication List:**  Carefully review the patient's medication list for potential culprits, paying close attention to sedatives, analgesics, anticholinergics, and medications that can cause metabolic disturbances.
+
+**Phase 3:  Confirmation & Documentation**
+
+6.  **Confirm Delirium Diagnosis:**  If there is strong evidence of delirium based on the clinical findings and the results of the screening tool, I would work with the attending physician or the designated healthcare provider to confirm the diagnosis.
+
+7.  **Document Findings:**  Thoroughly document all findings in the patient's medical record. This includes:
+    *   The date and time of the assessment.
+    *   The screening tool used (CAM, DRS, etc.).
+    *   The patient's score on the screening tool.
+    *   A detailed description of the patient's cognitive, behavioral, and physical symptoms.
+    *   The potential triggers for delirium.
+    *   The interventions that were implemented.
+    *   The patient's response to treatment.
+
+**Phase 4:  Intervention and Monitoring**
+
+8.  **Implement Interventions:**  Based on the diagnosis of delirium, implement appropriate interventions to address the underlying causes and prevent complications. Common interventions include:
+    *   **Treating the Underlying Cause:**  Addressing any underlying medical or surgical conditions that may be contributing to delirium (e.g., treating infection, correcting electrolyte imbalances, managing pain).
+    *   **Medication Management:**  Reviewing and adjusting medications to minimize potential side effects.  This may involve discontinuing or reducing sedatives, analgesics, or anticholinergics.
+    *   **Environmental Modifications:**  Creating a calm and quiet environment to reduce sensory overload.
+    *   **Frequent Reorientation:**  Regularly reorienting the patient to time, place, and person.
+    *   **Promoting Sleep:**  Encouraging regular sleep-wake cycles and providing appropriate sleep hygiene.
+    *   **Nutrition and Hydration:**  Ensuring adequate nutrition and hydration.
+    *   **Family/Caregiver Education:**  Educating family members or caregivers about delirium and how to support the patient.
+    *   **Monitoring:**  Close monitoring of the patient's mental status, vital signs, and other relevant parameters.
+
+9.  **Monitor Response to Treatment:**  Continuously monitor the patient's response to treatment and adjust interventions as needed.
+
+**Key Considerations:**
+
+*   **Early Detection:** Early detection of delirium is crucial to prevent complications and improve outcomes.
+*   **Multidisciplinary Approach:** Delirium is a complex condition that requires a multidisciplinary approach involving physicians, nurses, pharmacists, and other healthcare professionals.
+*   **Individualized Care:**  Treatment should be individualized to the patient's specific needs and circumstances.
+*   **Documentation is Crucial:** Accurate and thorough documentation is essential for effective communication and coordination of care.
+*   **Patient Safety:**  Prioritize patient safety and minimize the risk of falls, medication errors

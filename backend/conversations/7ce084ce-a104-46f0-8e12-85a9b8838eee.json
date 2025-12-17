@@ -1,0 +1,21 @@
+{
+  "conversation_id": "7ce084ce-a104-46f0-8e12-85a9b8838eee",
+  "messages": [
+    {
+      "id": "ca5993b9-2526-41ff-954a-8dd9b475ce19",
+      "type": "user",
+      "content": "testing conversation 2",
+      "timestamp": "2025-11-03T07:23:48.683513"
+    },
+    {
+      "id": "0f8c504a-1e97-44a8-bb00-c65dcb2c165e",
+      "type": "assistant",
+      "content": "Sure! How can I assist you today? Would you like to discuss something, create a plan, or explore a concept? Let me know! \ud83d\ude0a",
+      "timestamp": "2025-11-03T07:23:51.421108"
+    }
+  ],
+  "last_message_date": "2025-11-03T07:23:51.421192",
+  "created_date": "2025-11-03T07:23:51.421192",
+  "created_by": "sam.osia",
+  "title": "testing conversation 2"
+}
