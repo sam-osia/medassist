@@ -36,21 +36,26 @@ Available tools:
 - generate_plan(prompt, mrn, csn): Creates a structured execution plan for medical data analysis tasks. Use MRN and CSN of 0 if not explicitly provided.
 - edit_plan(existing_plan, edit_request): Modifies an existing plan based on user feedback or change requests
 
+Plan Versioning:
+When you generate or edit a plan, it will be saved in the conversation as plan_v1, plan_v2, etc. You can see previous plans in the conversation history and reference them naturally in your responses.
+
 When to use the generate_plan tool:
 - User explicitly asks for a new plan, steps, roadmap, or structured approach
 - Task requires breaking down into actionable steps for medical data analysis
 - User mentions "plan", "steps", "how to", "workflow", "process"
 - User requests analysis of patient data that would benefit from a systematic approach
+- No suitable plan exists in conversation history
 
 When to use the edit_plan tool:
-- User wants to modify, update, or change an existing plan
+- User wants to modify, update, or change an existing plan (look for plan_v# in conversation)
 - User provides feedback on a plan and requests changes
 - User asks to add, remove, or modify steps in an existing plan
 - User mentions editing, changing, updating, or improving a plan
+- You can extract the existing plan from the conversation history
 
 When to respond conversationally:
 - General questions about planning concepts
-- Clarification requests about existing plans  
+- Clarification requests about existing plans
 - Explanations of planning methodology
 - Casual conversation about medical planning
 - Simple questions that don't require structured execution
@@ -58,21 +63,20 @@ When to respond conversationally:
 If you use a planning tool, always explain the generated or modified plan in your final response and provide helpful context about how it can be used.
 """
 
-def conversational_planning_agent(user_prompt: str, mrn: int = None, csn: int = None, dataset: str = None, current_plan: dict = None) -> Dict[str, Any]:
+def conversational_planning_agent(messages: list, mrn: int = None, csn: int = None, dataset: str = None) -> Dict[str, Any]:
     """
     Conversational planning agent that can respond with text or generate plans using chain-of-thought reasoning.
-    
+
     Args:
-        user_prompt: The user's input message
+        messages: Full conversation history in OpenAI format [{role: "user"|"assistant", content: "..."}]
         mrn: Medical Record Number (optional)
-        csn: CSN encounter ID (optional) 
+        csn: CSN encounter ID (optional)
         dataset: Dataset name (optional)
-        current_plan: Existing plan context for editing (optional)
-    
+
     Returns:
         Dict with response_type, text_response, and optional plan_data
     """
-    print(f"[PLANNING AGENT DEBUG] Called with prompt: {user_prompt}, dataset: {dataset}, has_current_plan: {current_plan is not None}")
+    print(f"[PLANNING AGENT DEBUG] Called with {len(messages)} messages, dataset: {dataset}")
     
     api_key = os.getenv("OPENAI_API_KEY")
     client = OpenAI(api_key=api_key)
@@ -87,12 +91,7 @@ def conversational_planning_agent(user_prompt: str, mrn: int = None, csn: int = 
     # Convert tools to OpenAI function format
     tools = [tool.to_dict() for tool in tools_list]
 
-    # Initialize conversation with user prompt and optional plan context
-    messages = [{"role": "user", "content": user_prompt}]
-    if current_plan:
-        # Add plan context to help the agent understand what plan might need editing
-        plan_context = f"\n\nCurrent plan context available for editing: {json.dumps(current_plan, indent=2)}"
-        messages[0]["content"] += plan_context
+    # Messages already contain full conversation history from API
     plan_data = None
 
     print(f"[PLANNING AGENT DEBUG] Starting chain-of-thought processing...")
@@ -135,11 +134,7 @@ def conversational_planning_agent(user_prompt: str, mrn: int = None, csn: int = 
             try:
                 # Convert raw arguments to Pydantic model and execute tool
                 input_model_class = get_input_model_for_tool(tool_call.name)
-                
-                # For edit_plan tool, inject the current_plan if available
-                if tool_call.name == "edit_plan" and current_plan and "existing_plan" not in args:
-                    args["existing_plan"] = current_plan
-                
+
                 validated_inputs = input_model_class(**args)
                 result = tool_instance(validated_inputs)
                 plan_data = result
@@ -171,12 +166,10 @@ def conversational_planning_agent(user_prompt: str, mrn: int = None, csn: int = 
             # Agent provided final text response - conversation complete
             print("[PLANNING AGENT DEBUG] Agent provided final text response")
             final_text = response.output[0].content[0].text
-            
+
             # Determine response type based on whether planning tool was used
             response_type = "plan" if plan_data else "text"
-            if plan_data and final_text:
-                response_type = "hybrid"
-            
+
             return {
                 "response_type": response_type,
                 "text_response": final_text,

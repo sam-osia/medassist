@@ -14,9 +14,46 @@ from core.auth import permissions
 from .dependencies import get_current_user
 import datetime
 from uuid import uuid4
+import json
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 logger = logging.getLogger(__name__)
+
+
+def convert_to_openai_format(stored_messages: list) -> list:
+    """
+    Convert storage format to OpenAI format.
+    Plan messages become assistant messages with 'plan_v#: <json>' format.
+
+    Args:
+        stored_messages: List of messages in storage format with 'type' field
+
+    Returns:
+        List of messages in OpenAI format with 'role' field
+    """
+    openai_messages = []
+    plan_version = 0
+
+    for msg in stored_messages:
+        if msg['type'] == 'user':
+            openai_messages.append({
+                "role": "user",
+                "content": msg['content']
+            })
+        elif msg['type'] == 'assistant':
+            openai_messages.append({
+                "role": "assistant",
+                "content": msg['content']
+            })
+        elif msg['type'] == 'plan':
+            plan_version += 1
+            plan_json = json.dumps(msg['planData']['raw_plan'], indent=2)
+            openai_messages.append({
+                "role": "assistant",
+                "content": f"plan_v{plan_version}: {plan_json}"
+            })
+
+    return openai_messages
 
 
 @router.post("/conversational-plan")
@@ -27,7 +64,6 @@ def conversational_plan(data: Dict[str, Any] = Body(...), current_user: str = De
         mrn = data.get("mrn", 0)
         csn = data.get("csn", 0)
         dataset = data.get("dataset")
-        current_plan = data.get("current_plan")  # Optional existing plan context
         conversation_id = data.get("conversation_id")  # Conversation ID for stateful tracking
 
         if not user_prompt:
@@ -58,9 +94,11 @@ def conversational_plan(data: Dict[str, Any] = Body(...), current_user: str = De
             "timestamp": datetime.datetime.now().isoformat()
         }
         messages.append(user_message)
-        print(messages)
 
-        result = conversational_planning_agent(user_prompt, mrn, csn, dataset, current_plan)
+        # Convert to OpenAI format (includes all history + new message)
+        openai_messages = convert_to_openai_format(messages)
+
+        result = conversational_planning_agent(openai_messages, mrn, csn, dataset)
 
         # Append response messages to conversation based on response type
         if result["response_type"] == "text":
@@ -120,45 +158,8 @@ def conversational_plan(data: Dict[str, Any] = Body(...), current_user: str = De
                     "raw_plan": result["plan_data"]["raw_plan"]
                 }
             }
-        elif result["response_type"] == "hybrid":
-            # Generate plan ID similar to original endpoint
-            plan_id = f"plan_{result['plan_data']['raw_plan']['steps'][0]['id'] if result['plan_data']['raw_plan'].get('steps') else 'generated'}_{mrn}_{csn}"
 
-            # Add assistant message
-            assistant_message = {
-                "id": str(uuid4()),
-                "type": "assistant",
-                "content": result["text_response"],
-                "timestamp": datetime.datetime.now().isoformat()
-            }
-            messages.append(assistant_message)
 
-            # Add plan message
-            plan_message = {
-                "id": str(uuid4()),
-                "type": "plan",
-                "planData": {
-                    "raw_plan": result["plan_data"]["raw_plan"]
-                },
-                "message": result["text_response"],
-                "timestamp": datetime.datetime.now().isoformat()
-            }
-            messages.append(plan_message)
-
-            # Save conversation if conversation_id provided
-            if conversation_id:
-                save_conversation(conversation_id, messages, current_user)
-
-            return {
-                "status": "success",
-                "response_type": "hybrid",
-                "message": result["text_response"],
-                "plan_data": {
-                    "plan_id": plan_id,
-                    "raw_plan": result["plan_data"]["raw_plan"]
-                }
-            }
-        
     except Exception as e:
         logger.error(f"Error in conversational_plan: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
@@ -179,17 +180,24 @@ def edit_plan_step(data: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
                 detail="Missing required fields: original_prompt, original_plan, step_id, change_request"
             )
 
+        # Build a minimal conversation context with the plan and edit request
+        # This simulates a conversation where the plan was just created
+        messages = [
+            {"role": "user", "content": original_prompt},
+            {"role": "assistant", "content": f"plan_v1: {json.dumps(original_plan, indent=2)}"},
+            {"role": "user", "content": change_request}
+        ]
+
         # Use conversational planning agent to handle the edit
         result = conversational_planning_agent(
-            user_prompt=change_request,
+            messages=messages,
             mrn=0,
             csn=0,
-            dataset=None,
-            current_plan=original_plan
+            dataset=None
         )
 
         # Check if a plan was generated
-        if result["response_type"] not in ["plan", "hybrid"]:
+        if result["response_type"] != "plan":
             raise HTTPException(
                 status_code=500,
                 detail=f"Expected plan response but got: {result['response_type']}"
