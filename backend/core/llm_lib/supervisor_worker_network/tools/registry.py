@@ -44,6 +44,7 @@ from core.llm_lib.supervisor_worker_network.tools.flowsheets import (
 from core.llm_lib.supervisor_worker_network.tools.medications import (
     GetMedicationsIds,
     ReadMedication,
+    FilterMedication,
 )
 from core.llm_lib.supervisor_worker_network.tools.diagnosis import (
     GetDiagnosisIds,
@@ -65,14 +66,16 @@ from core.llm_lib.supervisor_worker_network.schemas.tool_inputs import (
     ReadMedicationInput,
     GetDiagnosisIdsInput,
     ReadDiagnosisInput,
-    AnalyzeNoteWithSpanAndReasonInput
+    AnalyzeNoteWithSpanAndReasonInput,
+    FilterMedicationInput,
 )
 
 # Authoritative Pydantic output models for schema generation
 from core.llm_lib.supervisor_worker_network.schemas.tool_outputs import (
     KeywordCountOutput,
     IdentifyFlagOutput,
-    AnalyzeNoteWithSpanAndReasonOutput
+    AnalyzeNoteWithSpanAndReasonOutput,
+    FilterMedicationOutput
 )
 
 
@@ -107,6 +110,7 @@ def _pydantic_input_model_map() -> Dict[str, type[BaseModel]]:
         # Medications
         "get_medications_ids": GetMedicationsIdsInput,
         "read_medication": ReadMedicationInput,
+        "filter_medication": FilterMedicationInput,
 
         # Diagnosis
         "get_diagnosis_ids": GetDiagnosisIdsInput,
@@ -123,6 +127,7 @@ def _pydantic_output_model_map() -> Dict[str, type[BaseModel]]:
         "keyword_count": KeywordCountOutput,
         "identify_flag": IdentifyFlagOutput,
         "analyze_note_with_span_and_reason": AnalyzeNoteWithSpanAndReasonOutput,
+        "filter_medication": FilterMedicationOutput,
     }
 
 
@@ -149,6 +154,7 @@ def _instantiate_all_tools() -> List[Tool]:
         # Medications
         GetMedicationsIds(),
         ReadMedication(),
+        FilterMedication(),
 
         # Diagnosis
         GetDiagnosisIds(),

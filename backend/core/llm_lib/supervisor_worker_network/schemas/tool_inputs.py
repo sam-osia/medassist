@@ -76,6 +76,11 @@ class HighlightMedicationInput(BaseModel):
     medication_name: str
     medications_list: List[str]
 
+class FilterMedicationInput(BaseModel):
+    mrn: int
+    csn: int
+    prompt: str
+
 # Diagnosis Tool Models
 class GetDiagnosisIdsInput(BaseModel):
     mrn: int
