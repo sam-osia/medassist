@@ -15,7 +15,8 @@ import {
   FormControl,
   FormLabel,
   Tabs,
-  Tab
+  Tab,
+  Tooltip
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -23,7 +24,7 @@ import {
   Forum as ForumIcon,
   Minimize as MinimizeIcon,
   PlaylistAddCheck as ProcessIcon,
-  HighlightAlt as AnnotationsIcon
+  Edit as AnnotateIcon
 } from '@mui/icons-material';
 import { datasetsService, workflowService } from '../services/ApiService';
 import EncounterCard from '../components/UI/PatientsChart/EncounterCard';
@@ -34,7 +35,6 @@ import FlowsheetsComponent from '../components/UI/SinglePatient/FlowsheetsCompon
 import FlowsheetsInstanceComponent from '../components/UI/SinglePatient/FlowsheetsInstanceComponent';
 import ResultsComponent from '../components/UI/SinglePatient/ResultsComponent';
 import ProcessComponent from '../components/UI/Process/ProcessComponent';
-import AnnotationsComponent from '../components/Annotations/AnnotationsComponent';
 import ChatComponent from '../components/UI/Chat/ChatComponent';
 import BreadcrumbNav from '../components/UI/Common/BreadcrumbNav';
 import { ProcessingProvider } from '../contexts/ProcessingContext';
@@ -440,39 +440,6 @@ const SinglePatientPage = () => {
                   Chat
                 </Typography>
               </Box>
-              
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 1,
-                  cursor: 'pointer',
-                  padding: 1,
-                  borderRadius: 1,
-                  transition: 'all 0.2s ease',
-                  '&:hover': {
-                    backgroundColor: 'surface.tab'
-                  }
-                }}
-              >
-                <AnnotationsIcon 
-                  sx={{ 
-                    color: 'text.secondary',
-                    fontSize: 24 
-                  }} 
-                />
-                <Typography
-                  variant="caption"
-                  sx={{
-                    fontSize: '0.65rem',
-                    fontWeight: 500,
-                    color: 'text.secondary'
-                  }}
-                >
-                  Annotations
-                </Typography>
-              </Box>
             </Box>
           </Box>
         </Box>
@@ -602,39 +569,6 @@ const SinglePatientPage = () => {
                   Chat
                 </Typography>
               </Box>
-              
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 1,
-                  cursor: 'pointer',
-                  padding: 1,
-                  borderRadius: 1,
-                  transition: 'all 0.2s ease',
-                  '&:hover': {
-                    backgroundColor: 'surface.tab'
-                  }
-                }}
-              >
-                <AnnotationsIcon 
-                  sx={{ 
-                    color: 'text.secondary',
-                    fontSize: 24 
-                  }} 
-                />
-                <Typography
-                  variant="caption"
-                  sx={{
-                    fontSize: '0.65rem',
-                    fontWeight: 500,
-                    color: 'text.secondary'
-                  }}
-                >
-                  Annotations
-                </Typography>
-              </Box>
             </Box>
           </Box>
         </Box>
@@ -667,13 +601,30 @@ const SinglePatientPage = () => {
             {/* Patient Information & Encounter Selection Card */}
             <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
               {/* Patient Header */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                <PersonIcon color="primary" sx={{ fontSize: 40 }} />
-                <Box>
-                  <Typography variant="h4" component="h1">
-                    Patient MRN: {patientData?.mrn}
-                  </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <PersonIcon color="primary" sx={{ fontSize: 40 }} />
+                  <Box>
+                    <Typography variant="h4" component="h1">
+                      Patient MRN: {patientData?.mrn}
+                    </Typography>
+                  </Box>
                 </Box>
+                {/* Annotation Mode - Only show when viewing through project context */}
+                {projectName && (
+                  <Tooltip title="Annotation mode coming soon - will allow annotating patient data">
+                    <span>
+                      <Button
+                        variant="outlined"
+                        startIcon={<AnnotateIcon />}
+                        disabled
+                        sx={{ opacity: 0.6 }}
+                      >
+                        Enter Annotation Mode
+                      </Button>
+                    </span>
+                  </Tooltip>
+                )}
               </Box>
 
               {/* Patient Demographics */}
@@ -863,14 +814,11 @@ const SinglePatientPage = () => {
               />
             )}
             {activeSidebarPanel === 'process' && (
-              <ProcessComponent 
+              <ProcessComponent
                 mrn={patientData?.mrn}
                 csn={selectedCSN}
                 patientExperiments={patientExperiments}
               />
-            )}
-            {activeSidebarPanel === 'annotations' && (
-              <AnnotationsComponent />
             )}
           </Box>
           
@@ -950,40 +898,6 @@ const SinglePatientPage = () => {
                 }}
               >
                 Chat
-              </Typography>
-            </Box>
-            
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 1,
-                cursor: 'pointer',
-                padding: 1,
-                borderRadius: 1,
-                transition: 'all 0.2s ease',
-                '&:hover': {
-                  backgroundColor: 'surface.tab'
-                }
-              }}
-              onClick={() => handleSidebarPanelChange('annotations')}
-            >
-              <AnnotationsIcon
-                sx={{
-                  color: activeSidebarPanel === 'annotations' && !chatCollapsed ? 'icon.main' : 'text.secondary',
-                  fontSize: 24
-                }}
-              />
-              <Typography
-                variant="caption"
-                sx={{
-                  fontSize: '0.65rem',
-                  fontWeight: 500,
-                  color: activeSidebarPanel === 'annotations' && !chatCollapsed ? 'icon.main' : 'text.secondary'
-                }}
-              >
-                Annotations
               </Typography>
             </Box>
           </Box>

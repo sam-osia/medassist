@@ -35,6 +35,9 @@ class AnalyzeNoteWithSpanAndReasonInput(BaseModel):
     note:str
     prompt: PromptInput
 
+class AnalyzeNoteWithSpanAndReasonInputForPlanner(BaseModel):
+    note:str
+
 # Keyword Count Tool Models
 class KeywordCountInput(BaseModel):
     text: str

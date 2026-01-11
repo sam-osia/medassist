@@ -7,3 +7,4 @@ from .projects import router as projects_router
 from .datasets import router as datasets_router
 from .users import router as users_router
 from .caboodle import router as caboodle_router
+from .annotations import router as annotations_router

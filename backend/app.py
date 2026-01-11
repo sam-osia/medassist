@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api import (chat_router, planning_router, auth_router, tool_router,
                  projects_router, datasets_router, workflow_router, users_router,
-                 caboodle_router)
+                 caboodle_router, annotations_router)
 
 import logging
 
@@ -36,3 +36,4 @@ app.include_router(projects_router, prefix="/api/projects")
 app.include_router(datasets_router, prefix="/api/datasets")
 app.include_router(users_router, prefix="/api/users")
 app.include_router(caboodle_router, prefix="/api/caboodle")
+app.include_router(annotations_router, prefix="/api/projects", tags=["annotations"])

@@ -15,7 +15,7 @@ import {
   Alert
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { renderEditableOutputField } from '../Toolkit/OutputFieldRenderer';
+import { renderEditableOutputField } from '../Toolkit/shared/outputs';
 
 // Variable picker component
 const VariablePicker = ({ variables, onInsert, readOnly = false, promptValue = null }) => {

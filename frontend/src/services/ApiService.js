@@ -274,3 +274,35 @@ export const caboodleService = {
     // Send LLM query about the data dictionary
     llmCall: (query) => ApiService.post('/caboodle/llm_call', { query })
 };
+
+// Annotation management functions
+export const annotationsService = {
+    // Annotation Groups
+    listGroups: (projectName) =>
+        ApiService.get(`/projects/${projectName}/annotations/groups`),
+
+    createGroup: (projectName, groupData) =>
+        ApiService.post(`/projects/${projectName}/annotations/groups`, groupData),
+
+    getGroup: (projectName, groupId) =>
+        ApiService.get(`/projects/${projectName}/annotations/groups/${groupId}`),
+
+    updateGroup: (projectName, groupId, groupData) =>
+        ApiService.patch(`/projects/${projectName}/annotations/groups/${groupId}`, groupData),
+
+    deleteGroup: (projectName, groupId) =>
+        ApiService.delete(`/projects/${projectName}/annotations/groups/${groupId}`),
+
+    // Annotation Values
+    getGroupValues: (projectName, groupId) =>
+        ApiService.get(`/projects/${projectName}/annotations/groups/${groupId}/values`),
+
+    getAnnotation: (projectName, groupId, itemId) =>
+        ApiService.get(`/projects/${projectName}/annotations/groups/${groupId}/values/${itemId}`),
+
+    saveAnnotation: (projectName, groupId, itemId, values) =>
+        ApiService.put(`/projects/${projectName}/annotations/groups/${groupId}/values/${itemId}`, { values }),
+
+    deleteAnnotation: (projectName, groupId, itemId) =>
+        ApiService.delete(`/projects/${projectName}/annotations/groups/${groupId}/values/${itemId}`)
+};
