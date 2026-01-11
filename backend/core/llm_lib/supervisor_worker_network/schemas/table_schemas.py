@@ -8,9 +8,7 @@ These are used by non-deterministic tools to provide context to the LLM during t
 MEDICATION_TABLE_SCHEMA = [
     'order_id', 
     'admin_line_num', 
-    'mrn', 
     'pat_id', 
-    'pat_enc_csn_id', 
     'medication_id', 
     'order_display_name', 
     'order_datetime',

@@ -248,12 +248,7 @@ class FilterMedication(Tool):
             if patient.get('mrn') == inputs.mrn:
                 for encounter in patient.get('encounters', []):
                     if int(encounter.get('csn')) == int(inputs.csn):
-                        # Extract medications and re-attach context IDs to match Golden Schema
-                        for med in encounter.get('medications', []):
-                            row = med.copy()
-                            row['mrn'] = inputs.mrn
-                            row['pat_enc_csn_id'] = inputs.csn
-                            medications_list.append(row)
+                        medications_list.extend(encounter.get('medications', []))
                         break
                 break
         
