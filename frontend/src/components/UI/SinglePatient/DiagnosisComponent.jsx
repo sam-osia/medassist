@@ -10,19 +10,30 @@ import {
   Paper,
   Chip,
   Box,
-  CircularProgress
+  CircularProgress,
+  Button
 } from '@mui/material';
 import {
-  Troubleshoot as DiagnosisIcon
+  Troubleshoot as DiagnosisIcon,
+  Check as CheckIcon,
+  Edit as EditIcon
 } from '@mui/icons-material';
 // Removed streaming hooks as part of simplification
 import { useProcessing } from '../../../contexts/ProcessingContext';
 import './ProcessingIndicators.css';
 
 // Individual diagnosis row component with processing state
-const DiagnosisRow = ({ diagnosis, index, isHighlighted = false, isProcessing = false }) => {
+const DiagnosisRow = ({
+  diagnosis,
+  index,
+  isHighlighted = false,
+  isProcessing = false,
+  annotationMode = false,
+  isAnnotated = false,
+  onAnnotateClick
+}) => {
   const isBeingProcessed = isProcessing;
-  
+
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     try {
@@ -33,9 +44,9 @@ const DiagnosisRow = ({ diagnosis, index, isHighlighted = false, isProcessing = 
   };
 
   return (
-    <TableRow 
+    <TableRow
       key={diagnosis.diagnosis_id || index}
-      sx={{ 
+      sx={{
         '&:last-child td, &:last-child th': { border: 0 },
         backgroundColor: isHighlighted ? '#fff9c4' : (isBeingProcessed ? '#e8f5e8' : 'transparent'),
         borderLeft: isHighlighted ? '4px solid #ffa726' : 'none',
@@ -72,15 +83,36 @@ const DiagnosisRow = ({ diagnosis, index, isHighlighted = false, isProcessing = 
         </Typography>
       </TableCell>
       <TableCell>
-        <Typography variant="body2">
-          {diagnosis.resolved_date ? `Resolved ${formatDate(diagnosis.resolved_date)}` : 'Active'}
-        </Typography>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <Typography variant="body2">
+            {diagnosis.resolved_date ? `Resolved ${formatDate(diagnosis.resolved_date)}` : 'Active'}
+          </Typography>
+          {annotationMode && (
+            <Button
+              size="small"
+              variant={isAnnotated ? 'outlined' : 'contained'}
+              color={isAnnotated ? 'success' : 'primary'}
+              startIcon={isAnnotated ? <CheckIcon /> : <EditIcon />}
+              onClick={() => onAnnotateClick(diagnosis)}
+            >
+              {isAnnotated ? 'Edit' : 'Annotate'}
+            </Button>
+          )}
+        </Box>
       </TableCell>
     </TableRow>
   );
 };
 
-const DiagnosisComponent = ({ diagnoses = [], mrn, csn, highlightedItems = [] }) => {
+const DiagnosisComponent = ({
+  diagnoses = [],
+  mrn,
+  csn,
+  highlightedItems = [],
+  annotationMode = false,
+  annotationMap = new Map(),
+  onAnnotateClick
+}) => {
   // Use processing context
   const { isItemProcessing, getProcessingCount } = useProcessing();
 
@@ -171,12 +203,15 @@ const DiagnosisComponent = ({ diagnoses = [], mrn, csn, highlightedItems = [] })
             </TableHead>
             <TableBody>
               {diagnoses.map((diagnosis, index) => (
-                <DiagnosisRow 
+                <DiagnosisRow
                   key={diagnosis.diagnosis_id || index}
                   diagnosis={diagnosis}
                   index={index}
                   isHighlighted={highlightedItems.includes(diagnosis.diagnosis_id)}
                   isProcessing={isItemProcessing('diagnoses', diagnosis.diagnosis_id)}
+                  annotationMode={annotationMode}
+                  isAnnotated={annotationMap.has(String(diagnosis.diagnosis_id))}
+                  onAnnotateClick={onAnnotateClick}
                 />
               ))}
             </TableBody>

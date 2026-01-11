@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, Paper, CircularProgress, Alert, Button, Tooltip } from '@mui/material';
-import { Edit as AnnotateIcon } from '@mui/icons-material';
+import { Box, Typography, CircularProgress, Alert } from '@mui/material';
 import DatasetTable from '../../Datasets/DatasetTable';
 import { datasetsService } from '../../../../services/ApiService';
 
@@ -58,28 +57,13 @@ const ProjectDatasetTab = ({ project }) => {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-        <Box>
-          <Typography variant="h6" gutterBottom>
-            Dataset: {project.dataset}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Total Patients: {patients.length}
-          </Typography>
-        </Box>
-        {/* Annotation Mode - Placeholder for future implementation */}
-        <Tooltip title="Annotation mode coming soon - will allow browsing and annotating data">
-          <span>
-            <Button
-              variant="outlined"
-              startIcon={<AnnotateIcon />}
-              disabled
-              sx={{ opacity: 0.6 }}
-            >
-              Enter Annotation Mode
-            </Button>
-          </span>
-        </Tooltip>
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="h6" gutterBottom>
+          Dataset: {project.dataset}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Total Patients: {patients.length}
+        </Typography>
       </Box>
 
       <DatasetTable

@@ -15,19 +15,19 @@ import {
   FormControl,
   FormLabel,
   Tabs,
-  Tab,
-  Tooltip
+  Tab
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
   Person as PersonIcon,
   Forum as ForumIcon,
   Minimize as MinimizeIcon,
-  PlaylistAddCheck as ProcessIcon,
-  Edit as AnnotateIcon
+  PlaylistAddCheck as ProcessIcon
 } from '@mui/icons-material';
-import { datasetsService, workflowService } from '../services/ApiService';
+import { datasetsService, workflowService, annotationsService } from '../services/ApiService';
 import EncounterCard from '../components/UI/PatientsChart/EncounterCard';
+import AnnotationModeDropdown from '../components/UI/Annotations/AnnotationModeDropdown';
+import AnnotationDialog from '../components/UI/Annotations/AnnotationDialog';
 import DiagnosisComponent from '../components/UI/SinglePatient/DiagnosisComponent';
 import MedicationsComponent from '../components/UI/SinglePatient/MedicationsComponent';
 import NotesComponent from '../components/UI/SinglePatient/NotesComponent';
@@ -57,6 +57,15 @@ const SinglePatientPage = () => {
   const [activeSidebarPanel, setActiveSidebarPanel] = useState('process');
   const [patientExperiments, setPatientExperiments] = useState([]);
 
+  // Annotation mode state
+  const [annotationMode, setAnnotationMode] = useState(false);
+  const [activeAnnotationGroup, setActiveAnnotationGroup] = useState(null);
+  const [existingAnnotations, setExistingAnnotations] = useState(new Map());
+  const [annotationDialogState, setAnnotationDialogState] = useState({
+    open: false,
+    item: null,
+    itemId: null
+  });
 
   // Decode dataset name for API calls
   const decodedDatasetName = datasetName ? decodeURIComponent(datasetName) : 'SickKids ICU';
@@ -230,6 +239,51 @@ const SinglePatientPage = () => {
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
+  };
+
+  // Annotation mode handlers
+  const enterAnnotationMode = async (group) => {
+    try {
+      const response = await annotationsService.getGroupValues(projectName, group.id);
+      const annotations = response.data.annotations || [];
+      const map = new Map(annotations.map(a => [a.item_id, a]));
+      setExistingAnnotations(map);
+      setActiveAnnotationGroup(group);
+      setAnnotationMode(true);
+    } catch (err) {
+      console.error('Error entering annotation mode:', err);
+    }
+  };
+
+  const exitAnnotationMode = () => {
+    setAnnotationMode(false);
+    setActiveAnnotationGroup(null);
+    setExistingAnnotations(new Map());
+  };
+
+  const openAnnotationDialog = (item, itemId) => {
+    setAnnotationDialogState({ open: true, item, itemId: String(itemId) });
+  };
+
+  const closeAnnotationDialog = () => {
+    setAnnotationDialogState({ open: false, item: null, itemId: null });
+  };
+
+  const saveAnnotation = async (values) => {
+    const { itemId } = annotationDialogState;
+    await annotationsService.saveAnnotation(
+      projectName,
+      activeAnnotationGroup.id,
+      itemId,
+      values
+    );
+    // Update local cache
+    setExistingAnnotations(prev => {
+      const next = new Map(prev);
+      next.set(itemId, { item_id: itemId, values });
+      return next;
+    });
+    closeAnnotationDialog();
   };
 
   const selectedEncounter = patientData?.encounters?.find(
@@ -612,18 +666,12 @@ const SinglePatientPage = () => {
                 </Box>
                 {/* Annotation Mode - Only show when viewing through project context */}
                 {projectName && (
-                  <Tooltip title="Annotation mode coming soon - will allow annotating patient data">
-                    <span>
-                      <Button
-                        variant="outlined"
-                        startIcon={<AnnotateIcon />}
-                        disabled
-                        sx={{ opacity: 0.6 }}
-                      >
-                        Enter Annotation Mode
-                      </Button>
-                    </span>
-                  </Tooltip>
+                  <AnnotationModeDropdown
+                    projectName={projectName}
+                    activeGroup={activeAnnotationGroup}
+                    onSelectGroup={enterAnnotationMode}
+                    onExit={exitAnnotationMode}
+                  />
                 )}
               </Box>
 
@@ -668,11 +716,14 @@ const SinglePatientPage = () => {
                           control={<Radio />}
                           label={
                             <Box sx={{ ml: 1, width: '100%', flex: 1 }}>
-                              <EncounterCard 
+                              <EncounterCard
                                 encounter={encounter}
                                 metrics={encounterSummary?.metrics}
                                 patientMrn={patientData.mrn}
                                 hideViewButton={true}
+                                annotationMode={annotationMode && activeAnnotationGroup?.source === 'encounter'}
+                                isAnnotated={existingAnnotations.has(String(encounter.csn))}
+                                onAnnotateClick={() => openAnnotationDialog(encounter, encounter.csn)}
                               />
                             </Box>
                           }
@@ -724,6 +775,9 @@ const SinglePatientPage = () => {
                     mrn={patientData?.mrn}
                     csn={selectedCSN}
                     highlightedItems={getHighlightedItems('note')}
+                    annotationMode={annotationMode && activeAnnotationGroup?.source === 'note'}
+                    annotationMap={existingAnnotations}
+                    onAnnotateClick={(note) => openAnnotationDialog(note, note.note_id)}
                   />
                 )}
 
@@ -734,6 +788,9 @@ const SinglePatientPage = () => {
                     mrn={patientData?.mrn}
                     csn={selectedCSN}
                     highlightedItems={getHighlightedItems('medications')}
+                    annotationMode={annotationMode && activeAnnotationGroup?.source === 'medication'}
+                    annotationMap={existingAnnotations}
+                    onAnnotateClick={(med) => openAnnotationDialog(med, med.order_id)}
                   />
                 )}
 
@@ -754,6 +811,9 @@ const SinglePatientPage = () => {
                     mrn={patientData?.mrn}
                     csn={selectedCSN}
                     highlightedItems={getHighlightedItems('diagnosis')}
+                    annotationMode={annotationMode && activeAnnotationGroup?.source === 'diagnosis'}
+                    annotationMap={existingAnnotations}
+                    onAnnotateClick={(diag) => openAnnotationDialog(diag, diag.diagnosis_id)}
                   />
                 )}
               </Box>
@@ -903,6 +963,17 @@ const SinglePatientPage = () => {
           </Box>
         </Box>
       </Box>
+
+      {/* Annotation Dialog */}
+      <AnnotationDialog
+        open={annotationDialogState.open}
+        onClose={closeAnnotationDialog}
+        item={annotationDialogState.item}
+        sourceType={activeAnnotationGroup?.source}
+        group={activeAnnotationGroup}
+        existingValues={existingAnnotations.get(annotationDialogState.itemId)}
+        onSave={saveAnnotation}
+      />
     </ProcessingProvider>
   );
 };

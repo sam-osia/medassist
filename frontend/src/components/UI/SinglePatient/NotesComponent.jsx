@@ -21,15 +21,26 @@ import {
 import {
   Description as NoteIcon,
   Note as ViewIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  Check as CheckIcon,
+  Edit as EditIcon
 } from '@mui/icons-material';
 // Removed streaming hooks as part of simplification
 import { useProcessing } from '../../../contexts/ProcessingContext';
 
 // Individual note row component with processing state
-const NoteRow = ({ note, index, onViewNote, isHighlighted = false, isProcessing = false }) => {
+const NoteRow = ({
+  note,
+  index,
+  onViewNote,
+  isHighlighted = false,
+  isProcessing = false,
+  annotationMode = false,
+  isAnnotated = false,
+  onAnnotateClick
+}) => {
   const isBeingProcessed = isProcessing;
-  
+
   const formatDateTime = (dateString) => {
     if (!dateString) return 'N/A';
     try {
@@ -40,9 +51,9 @@ const NoteRow = ({ note, index, onViewNote, isHighlighted = false, isProcessing 
   };
 
   return (
-    <TableRow 
+    <TableRow
       key={note.note_id || index}
-      sx={{ 
+      sx={{
         '&:last-child td, &:last-child th': { border: 0 },
         backgroundColor: isHighlighted ? '#fff9c4' : (isBeingProcessed ? '#e8f5e8' : 'transparent'),
         borderLeft: isHighlighted ? '4px solid #ffa726' : 'none',
@@ -77,20 +88,41 @@ const NoteRow = ({ note, index, onViewNote, isHighlighted = false, isProcessing 
         </Typography>
       </TableCell>
       <TableCell>
-        <Button
-          variant="contained"
-          size="small"
-          onClick={() => onViewNote(note)}
-          disabled={!note.note_text || isBeingProcessed}
-        >
-          {isBeingProcessed ? 'Processing...' : 'View'}
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="contained"
+            size="small"
+            onClick={() => onViewNote(note)}
+            disabled={!note.note_text || isBeingProcessed}
+          >
+            {isBeingProcessed ? 'Processing...' : 'View'}
+          </Button>
+          {annotationMode && (
+            <Button
+              size="small"
+              variant={isAnnotated ? 'outlined' : 'contained'}
+              color={isAnnotated ? 'success' : 'primary'}
+              startIcon={isAnnotated ? <CheckIcon /> : <EditIcon />}
+              onClick={() => onAnnotateClick(note)}
+            >
+              {isAnnotated ? 'Edit' : 'Annotate'}
+            </Button>
+          )}
+        </Box>
       </TableCell>
     </TableRow>
   );
 };
 
-const NotesComponent = ({ notes = [], mrn, csn, highlightedItems = [] }) => {
+const NotesComponent = ({
+  notes = [],
+  mrn,
+  csn,
+  highlightedItems = [],
+  annotationMode = false,
+  annotationMap = new Map(),
+  onAnnotateClick
+}) => {
   const [selectedNote, setSelectedNote] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -202,13 +234,16 @@ const NotesComponent = ({ notes = [], mrn, csn, highlightedItems = [] }) => {
               </TableHead>
               <TableBody>
                 {notes.map((note, index) => (
-                  <NoteRow 
+                  <NoteRow
                     key={note.note_id || index}
                     note={note}
                     index={index}
                     onViewNote={handleViewNote}
                     isHighlighted={highlightedItems.includes(note.note_id)}
                     isProcessing={isItemProcessing('notes', note.note_id)}
+                    annotationMode={annotationMode}
+                    isAnnotated={annotationMap.has(String(note.note_id))}
+                    onAnnotateClick={onAnnotateClick}
                   />
                 ))}
               </TableBody>
