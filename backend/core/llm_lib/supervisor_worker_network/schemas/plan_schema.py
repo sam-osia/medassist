@@ -1,6 +1,9 @@
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, Literal, Union, Annotated
 from pydantic import BaseModel, Field, ConfigDict
+
+# Note: ToolInput types are imported for reference but inputs accept Dict[str, Any]
+# since plans contain template strings like {{mrn}} that are resolved at execution time
 from core.llm_lib.supervisor_worker_network.schemas.tool_inputs import (
     GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput, 
     HighlightPatientNoteInput, AnalyzeNoteWithSpanAndReasonInput,
@@ -9,13 +12,17 @@ from core.llm_lib.supervisor_worker_network.schemas.tool_inputs import (
     KeywordCountInput, IdentifyFlagInput, AnalyzeFlowsheetInstanceInput
 )
 
-ToolInput = Union[
+# ToolInput union for strict validation at execution time (after template resolution)
+ToolInputStrict = Union[
     GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput, 
     HighlightPatientNoteInput, AnalyzeNoteWithSpanAndReasonInput, ReadFlowsheetsTableInput,
     SummarizeFlowsheetsTableInput, GetMedicationsIdsInput, ReadMedicationInput,
     GetDiagnosisIdsInput, ReadDiagnosisInput, KeywordCountInput, IdentifyFlagInput,
     AnalyzeFlowsheetInstanceInput
 ]
+
+# ToolInput for plans - accepts Dict since it may contain template strings
+ToolInput = Dict[str, Any]
 
 # ---------- Condition Types ----------
 class SimpleCondition(BaseModel):
@@ -44,9 +51,12 @@ LogicalCondition.model_rebuild()
 
 # ---------- Step Variants ----------
 class BaseStep(BaseModel):
-    model_config = ConfigDict(extra="forbid")  # <- blocks unknown keys
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)  # Allow both alias and field name
     id: str
     step_summary: str
+    # Optional metadata fields from intermediate planning steps
+    notes: Optional[str] = None
+    reasoning: Optional[str] = None
 
 class ToolStep(BaseStep):
     type: Literal["tool"] = "tool"
@@ -60,7 +70,7 @@ class IfStep(BaseStep):
     type: Literal["if"] = "if"
     condition: Condition
     then: BasicStep
-    # otherwise: List["Step"] = Field(default_factory=list)
+    otherwise: Optional[List["AllSteps"]] = None
 
 AdvancedSteps = Union[ToolStep, IfStep]
 
@@ -81,4 +91,20 @@ AllSteps = Union[ToolStep, IfStep, LoopStep, FlagVariableStep]
 
 # ---------- The Plan ----------
 class Plan(BaseModel):
+    """Final plan schema with fully-formed steps.
+    
+    All required fields must be populated for execution.
+    This is the output of the planning agent after all stages complete.
+    
+    Use plan_verifier.verify_plan() to validate before execution.
+    """
+AllSteps = Union[ToolStep, IfStep, LoopStep, FlagVariableStep]
+
+# ---------- The Plan ----------
+class Plan(BaseModel):
+    """Final plan schema with fully-formed steps.
+    
+    All required fields must be populated for execution.
+    This is the output of the planning agent after all stages complete.
+    """
     steps: List[AllSteps]
