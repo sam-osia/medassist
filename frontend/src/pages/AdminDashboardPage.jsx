@@ -29,7 +29,9 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Grid
+  Grid,
+  Switch,
+  Tooltip
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -68,18 +70,16 @@ const AdminDashboardPage = () => {
   const [userToDelete, setUserToDelete] = useState(null);
 
   // Dataset Access Tab State
-  const [selectedUserForDataset, setSelectedUserForDataset] = useState('');
-  const [userDatasets, setUserDatasets] = useState([]);
   const [availableDatasets, setAvailableDatasets] = useState([]);
-  const [selectedDatasetToGrant, setSelectedDatasetToGrant] = useState('');
   const [datasetsLoading, setDatasetsLoading] = useState(false);
+  const [datasetAccessMap, setDatasetAccessMap] = useState(new Map());
+  const [datasetLoadingCells, setDatasetLoadingCells] = useState(new Map());
 
   // Project Access Tab State
-  const [selectedUserForProject, setSelectedUserForProject] = useState('');
-  const [userProjects, setUserProjects] = useState([]);
   const [availableProjects, setAvailableProjects] = useState([]);
-  const [selectedProjectToGrant, setSelectedProjectToGrant] = useState('');
   const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectAccessMap, setProjectAccessMap] = useState(new Map());
+  const [projectLoadingCells, setProjectLoadingCells] = useState(new Map());
 
   // Snackbar State
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -98,6 +98,31 @@ const AdminDashboardPage = () => {
     fetchAvailableDatasets();
     fetchAvailableProjects();
   }, []);
+
+  // Build dataset access map when users or datasets change
+  useEffect(() => {
+    const map = new Map();
+    users.forEach(user => {
+      user.allowed_datasets?.forEach(dataset => {
+        map.set(`${user.username}:${dataset}`, true);
+      });
+    });
+    setDatasetAccessMap(map);
+  }, [users, availableDatasets]);
+
+  // Build project access map when users or projects change
+  useEffect(() => {
+    const map = new Map();
+    availableProjects.forEach(project => {
+      // Owner has access
+      map.set(`${project.owner}:${project.project_name}`, true);
+      // Allowed users have access
+      project.allowed_users?.forEach(username => {
+        map.set(`${username}:${project.project_name}`, true);
+      });
+    });
+    setProjectAccessMap(map);
+  }, [users, availableProjects]);
 
   const fetchUsers = async () => {
     setUsersLoading(true);
@@ -248,129 +273,105 @@ const AdminDashboardPage = () => {
   };
 
   // Dataset Access Functions
-  const handleUserSelectForDataset = async (username) => {
-    setSelectedUserForDataset(username);
-    if (username) {
-      setDatasetsLoading(true);
-      try {
-        const response = await usersService.getUserDatasets(username);
-        setUserDatasets(response.data.datasets || []);
-      } catch (err) {
+  const handleDatasetAccessToggle = async (username, datasetName) => {
+    const key = `${username}:${datasetName}`;
+    const hasAccess = datasetAccessMap.get(key) || false;
+
+    setDatasetLoadingCells(prev => new Map(prev).set(key, true));
+
+    try {
+      if (hasAccess) {
+        await usersService.revokeDatasetAccess(username, datasetName);
         setSnackbar({
           open: true,
-          message: err.response?.data?.detail || 'Failed to load user datasets',
-          severity: 'error'
+          message: `Revoked access to '${datasetName}' for user '${username}'`,
+          severity: 'success'
         });
-      } finally {
-        setDatasetsLoading(false);
+      } else {
+        await usersService.grantDatasetAccess(username, datasetName);
+        setSnackbar({
+          open: true,
+          message: `Granted access to '${datasetName}' for user '${username}'`,
+          severity: 'success'
+        });
       }
-    } else {
-      setUserDatasets([]);
-    }
-  };
 
-  const handleGrantDatasetAccess = async () => {
-    if (!selectedUserForDataset || !selectedDatasetToGrant) {
-      setSnackbar({ open: true, message: 'Please select a user and dataset', severity: 'error' });
-      return;
-    }
-
-    try {
-      await usersService.grantDatasetAccess(selectedUserForDataset, selectedDatasetToGrant);
-      setSnackbar({
-        open: true,
-        message: `Granted access to '${selectedDatasetToGrant}' for user '${selectedUserForDataset}'`,
-        severity: 'success'
-      });
-      setSelectedDatasetToGrant('');
-      handleUserSelectForDataset(selectedUserForDataset); // Refresh datasets
+      const newMap = new Map(datasetAccessMap);
+      if (hasAccess) {
+        newMap.delete(key);
+      } else {
+        newMap.set(key, true);
+      }
+      setDatasetAccessMap(newMap);
+      fetchUsers();
     } catch (err) {
       setSnackbar({
         open: true,
-        message: err.response?.data?.detail || 'Failed to grant dataset access',
+        message: err.response?.data?.detail || 'Failed to update dataset access',
         severity: 'error'
       });
-    }
-  };
-
-  const handleRevokeDatasetAccess = async (datasetName) => {
-    try {
-      await usersService.revokeDatasetAccess(selectedUserForDataset, datasetName);
-      setSnackbar({
-        open: true,
-        message: `Revoked access to '${datasetName}' for user '${selectedUserForDataset}'`,
-        severity: 'success'
-      });
-      handleUserSelectForDataset(selectedUserForDataset); // Refresh datasets
-    } catch (err) {
-      setSnackbar({
-        open: true,
-        message: err.response?.data?.detail || 'Failed to revoke dataset access',
-        severity: 'error'
+    } finally {
+      setDatasetLoadingCells(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(key);
+        return newMap;
       });
     }
   };
 
   // Project Access Functions
-  const handleUserSelectForProject = async (username) => {
-    setSelectedUserForProject(username);
-    if (username) {
-      setProjectsLoading(true);
-      try {
-        const response = await usersService.getUserProjects(username);
-        setUserProjects(response.data.projects || []);
-      } catch (err) {
-        setSnackbar({
-          open: true,
-          message: err.response?.data?.detail || 'Failed to load user projects',
-          severity: 'error'
-        });
-      } finally {
-        setProjectsLoading(false);
-      }
-    } else {
-      setUserProjects([]);
-    }
-  };
-
-  const handleGrantProjectAccess = async () => {
-    if (!selectedUserForProject || !selectedProjectToGrant) {
-      setSnackbar({ open: true, message: 'Please select a user and project', severity: 'error' });
+  const handleProjectAccessToggle = async (username, projectName, projectOwner) => {
+    if (projectOwner === username) {
+      setSnackbar({
+        open: true,
+        message: 'Cannot remove project owner from project',
+        severity: 'error'
+      });
       return;
     }
 
-    try {
-      await usersService.addUserToProject(selectedUserForProject, selectedProjectToGrant);
-      setSnackbar({
-        open: true,
-        message: `Added user '${selectedUserForProject}' to project '${selectedProjectToGrant}'`,
-        severity: 'success'
-      });
-      setSelectedProjectToGrant('');
-      handleUserSelectForProject(selectedUserForProject); // Refresh projects
-    } catch (err) {
-      setSnackbar({
-        open: true,
-        message: err.response?.data?.detail || 'Failed to grant project access',
-        severity: 'error'
-      });
-    }
-  };
+    const key = `${username}:${projectName}`;
+    const hasAccess = projectAccessMap.get(key) || false;
 
-  const handleRevokeProjectAccess = async (projectName) => {
+    setProjectLoadingCells(prev => new Map(prev).set(key, true));
+
     try {
-      await usersService.removeUserFromProject(selectedUserForProject, projectName);
-      setSnackbar({
-        open: true,
-        message: `Removed user '${selectedUserForProject}' from project '${projectName}'`,
-        severity: 'success'
-      });
-      handleUserSelectForProject(selectedUserForProject); // Refresh projects
+      if (hasAccess) {
+        await usersService.removeUserFromProject(username, projectName);
+        setSnackbar({
+          open: true,
+          message: `Removed user '${username}' from project '${projectName}'`,
+          severity: 'success'
+        });
+      } else {
+        await usersService.addUserToProject(username, projectName);
+        setSnackbar({
+          open: true,
+          message: `Added user '${username}' to project '${projectName}'`,
+          severity: 'success'
+        });
+      }
+
+      const newMap = new Map(projectAccessMap);
+      if (hasAccess) {
+        newMap.delete(key);
+      } else {
+        newMap.set(key, true);
+      }
+      setProjectAccessMap(newMap);
+      fetchUsers();
+      fetchAvailableProjects();
     } catch (err) {
       setSnackbar({
         open: true,
-        message: err.response?.data?.detail || 'Failed to revoke project access',
+        message: err.response?.data?.detail || 'Failed to update project access',
         severity: 'error'
+      });
+    } finally {
+      setProjectLoadingCells(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(key);
+        return newMap;
       });
     }
   };
@@ -482,80 +483,64 @@ const AdminDashboardPage = () => {
             {/* Dataset Access Tab */}
             <Typography variant="h6" sx={{ mb: 3 }}>Dataset Access Management</Typography>
 
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Select User</InputLabel>
-                  <Select
-                    value={selectedUserForDataset}
-                    onChange={(e) => handleUserSelectForDataset(e.target.value)}
-                    label="Select User"
-                  >
-                    <MenuItem value="">
-                      <em>None</em>
-                    </MenuItem>
-                    {users.map((user) => (
-                      <MenuItem key={user.username} value={user.username}>
-                        {user.username} {user.is_admin && '(Admin)'}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              {selectedUserForDataset && (
-                <>
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle1" sx={{ mb: 1 }}>Current Datasets</Typography>
-                    {datasetsLoading ? (
-                      <CircularProgress size={24} />
-                    ) : userDatasets.length > 0 ? (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                        {userDatasets.map((dataset) => (
-                          <Chip
-                            key={dataset}
-                            label={dataset}
-                            onDelete={() => handleRevokeDatasetAccess(dataset)}
-                            color="primary"
-                          />
+            {usersLoading || datasetsLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : users.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ p: 3, textAlign: 'center' }}>
+                No users found. Create users in the Users tab.
+              </Typography>
+            ) : availableDatasets.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ p: 3, textAlign: 'center' }}>
+                No datasets available.
+              </Typography>
+            ) : (
+              <>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                  Scroll horizontally to see all {availableDatasets.length} datasets
+                </Typography>
+                <TableContainer sx={{ overflowX: 'auto' }}>
+                  <Table sx={{ minWidth: 650 }} size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'background.paper', zIndex: 1, fontWeight: 'bold' }}>
+                          Username
+                        </TableCell>
+                        {availableDatasets.map(dataset => (
+                          <TableCell key={dataset.dataset_name} align="center">
+                            {dataset.dataset_name}
+                          </TableCell>
                         ))}
-                      </Box>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        No datasets assigned
-                      </Typography>
-                    )}
-                  </Grid>
-
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle1" sx={{ mb: 1 }}>Grant Access</Typography>
-                    <Box sx={{ display: 'flex', gap: 2 }}>
-                      <FormControl sx={{ flex: 1 }}>
-                        <InputLabel>Select Dataset</InputLabel>
-                        <Select
-                          value={selectedDatasetToGrant}
-                          onChange={(e) => setSelectedDatasetToGrant(e.target.value)}
-                          label="Select Dataset"
-                        >
-                          {availableDatasets.map((dataset) => (
-                            <MenuItem key={dataset.dataset_name} value={dataset.dataset_name}>
-                              {dataset.dataset_name}
-                            </MenuItem>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {users.map(user => (
+                        <TableRow key={user.username} hover>
+                          <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'background.paper', fontWeight: 'medium' }}>
+                            {user.username}
+                            {user.is_admin && <Chip label="Admin" size="small" color="primary" sx={{ ml: 1 }} />}
+                          </TableCell>
+                          {availableDatasets.map(dataset => (
+                            <TableCell key={dataset.dataset_name} align="center">
+                              {datasetLoadingCells.get(`${user.username}:${dataset.dataset_name}`) ? (
+                                <CircularProgress size={20} />
+                              ) : (
+                                <Switch
+                                  checked={datasetAccessMap.get(`${user.username}:${dataset.dataset_name}`) || false}
+                                  onChange={() => handleDatasetAccessToggle(user.username, dataset.dataset_name)}
+                                  size="small"
+                                />
+                              )}
+                            </TableCell>
                           ))}
-                        </Select>
-                      </FormControl>
-                      <Button
-                        variant="contained"
-                        onClick={handleGrantDatasetAccess}
-                        disabled={!selectedDatasetToGrant}
-                      >
-                        Grant Access
-                      </Button>
-                    </Box>
-                  </Grid>
-                </>
-              )}
-            </Grid>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </>
+            )}
           </Paper>
         )}
 
@@ -564,80 +549,69 @@ const AdminDashboardPage = () => {
             {/* Project Access Tab */}
             <Typography variant="h6" sx={{ mb: 3 }}>Project Access Management</Typography>
 
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Select User</InputLabel>
-                  <Select
-                    value={selectedUserForProject}
-                    onChange={(e) => handleUserSelectForProject(e.target.value)}
-                    label="Select User"
-                  >
-                    <MenuItem value="">
-                      <em>None</em>
-                    </MenuItem>
-                    {users.map((user) => (
-                      <MenuItem key={user.username} value={user.username}>
-                        {user.username} {user.is_admin && '(Admin)'}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              {selectedUserForProject && (
-                <>
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle1" sx={{ mb: 1 }}>Current Projects</Typography>
-                    {projectsLoading ? (
-                      <CircularProgress size={24} />
-                    ) : userProjects.length > 0 ? (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                        {userProjects.map((project) => (
-                          <Chip
-                            key={project.project_name}
-                            label={`${project.project_name} ${project.owner === selectedUserForProject ? '(Owner)' : ''}`}
-                            onDelete={project.owner !== selectedUserForProject ? () => handleRevokeProjectAccess(project.project_name) : undefined}
-                            color="primary"
-                          />
+            {usersLoading || projectsLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : users.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ p: 3, textAlign: 'center' }}>
+                No users found. Create users in the Users tab.
+              </Typography>
+            ) : availableProjects.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ p: 3, textAlign: 'center' }}>
+                No projects available.
+              </Typography>
+            ) : (
+              <>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                  Scroll horizontally to see all {availableProjects.length} projects
+                </Typography>
+                <TableContainer sx={{ overflowX: 'auto' }}>
+                  <Table sx={{ minWidth: 650 }} size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'background.paper', zIndex: 1, fontWeight: 'bold' }}>
+                          Username
+                        </TableCell>
+                        {availableProjects.map(project => (
+                          <TableCell key={project.project_name} align="center">
+                            {project.project_name}
+                          </TableCell>
                         ))}
-                      </Box>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        No projects assigned
-                      </Typography>
-                    )}
-                  </Grid>
-
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle1" sx={{ mb: 1 }}>Grant Access</Typography>
-                    <Box sx={{ display: 'flex', gap: 2 }}>
-                      <FormControl sx={{ flex: 1 }}>
-                        <InputLabel>Select Project</InputLabel>
-                        <Select
-                          value={selectedProjectToGrant}
-                          onChange={(e) => setSelectedProjectToGrant(e.target.value)}
-                          label="Select Project"
-                        >
-                          {availableProjects.map((project) => (
-                            <MenuItem key={project.project_name} value={project.project_name}>
-                              {project.project_name}
-                            </MenuItem>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {users.map(user => (
+                        <TableRow key={user.username} hover>
+                          <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'background.paper', fontWeight: 'medium' }}>
+                            {user.username}
+                            {user.is_admin && <Chip label="Admin" size="small" color="primary" sx={{ ml: 1 }} />}
+                          </TableCell>
+                          {availableProjects.map(project => (
+                            <TableCell key={project.project_name} align="center">
+                              {projectLoadingCells.get(`${user.username}:${project.project_name}`) ? (
+                                <CircularProgress size={20} />
+                              ) : (
+                                <Tooltip title={project.owner === user.username ? "Cannot remove project owner" : ""}>
+                                  <span>
+                                    <Switch
+                                      checked={projectAccessMap.get(`${user.username}:${project.project_name}`) || false}
+                                      onChange={() => handleProjectAccessToggle(user.username, project.project_name, project.owner)}
+                                      disabled={project.owner === user.username}
+                                      size="small"
+                                    />
+                                  </span>
+                                </Tooltip>
+                              )}
+                            </TableCell>
                           ))}
-                        </Select>
-                      </FormControl>
-                      <Button
-                        variant="contained"
-                        onClick={handleGrantProjectAccess}
-                        disabled={!selectedProjectToGrant}
-                      >
-                        Grant Access
-                      </Button>
-                    </Box>
-                  </Grid>
-                </>
-              )}
-            </Grid>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </>
+            )}
           </Paper>
         )}
 
