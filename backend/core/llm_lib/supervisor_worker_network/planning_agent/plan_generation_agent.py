@@ -34,8 +34,8 @@ class GeneratePlanInput(BaseModel):
     csn: Optional[int] = 0
 
 def load_agent_config() -> str:
-    """Load planning agent configuration from markdown file."""
-    config_path = Path(__file__).parent / "planning_agent.md"
+    """Load planning agent configuration from markdown file in agents directory."""
+    config_path = Path(__file__).parent.parent / "agents" / "planning_agent.md"
     with open(config_path, 'r', encoding='utf-8') as f:
         return f.read()
 
