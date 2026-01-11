@@ -33,8 +33,12 @@ planning_system_prompt = """
 You are a planning assistant that can help with both conversation and plan generation.
 
 Available tools:
-- generate_plan(prompt, mrn, csn): Creates a structured execution plan for medical data analysis tasks. Use MRN and CSN of 0 if not explicitly provided.
-- edit_plan(existing_plan, edit_request): Modifies an existing plan based on user feedback or change requests
+- generate_plan(prompt, mrn, csn): Creates a structured execution plan for medical data analysis tasks. 
+  NOTE: MRN and CSN are ALWAYS set to 0 during planning as placeholders. The workflow executor will replace 
+  these with actual patient data values at execution time.
+- edit_plan(existing_plan, edit_request): Modifies an existing plan based on user feedback or change requests.
+  IMPORTANT: You MUST extract the existing_plan from the conversation history. Look for JSON plan objects in 
+  previous assistant messages. The existing_plan parameter must be the complete plan object (dict), not a string.
 
 Plan Versioning:
 When you generate or edit a plan, it will be saved in the conversation as plan_v1, plan_v2, etc. You can see previous plans in the conversation history and reference them naturally in your responses.
@@ -51,7 +55,11 @@ When to use the edit_plan tool:
 - User provides feedback on a plan and requests changes
 - User asks to add, remove, or modify steps in an existing plan
 - User mentions editing, changing, updating, or improving a plan
-- You can extract the existing plan from the conversation history
+- CRITICAL: When calling edit_plan, you MUST:
+  1. Look through the conversation history for the most recent plan (it will be a JSON object in an assistant message)
+  2. Extract the complete plan object from that message
+  3. Pass it as the existing_plan parameter (as a dict/object, NOT as a string)
+  4. Include the user's edit request as the edit_request parameter
 
 When to respond conversationally:
 - General questions about planning concepts
@@ -63,18 +71,21 @@ When to respond conversationally:
 If you use a planning tool, always explain the generated or modified plan in your final response and provide helpful context about how it can be used.
 """
 
-def conversational_planning_agent(messages: list, mrn: int = None, csn: int = None, dataset: str = None) -> Dict[str, Any]:
+def conversational_planning_agent(messages: list, mrn: int = 0, csn: int = 0, dataset: str = None) -> Dict[str, Any]:
     """
     Conversational planning agent that can respond with text or generate plans using chain-of-thought reasoning.
 
     Args:
         messages: Full conversation history in OpenAI format [{role: "user"|"assistant", content: "..."}]
-        mrn: Medical Record Number (optional)
-        csn: CSN encounter ID (optional)
+        mrn: Medical Record Number (default 0 as placeholder for execution time)
+        csn: CSN encounter ID (default 0 as placeholder for execution time)
         dataset: Dataset name (optional)
 
     Returns:
         Dict with response_type, text_response, and optional plan_data
+    
+    Note: MRN and CSN are placeholders during planning. They will be set by the workflow executor
+          to actual values from the data at execution time.
     """
     print(f"[PLANNING AGENT DEBUG] Called with {len(messages)} messages, dataset: {dataset}")
     
@@ -180,11 +191,11 @@ def main(user_prompt: str = None, mrn: int = None, csn: int = None):
     """Test the conversational planning agent."""
     print("Testing Conversational Planning Agent\n")
 
-    # Use provided values or defaults
+    # Use provided values or defaults (0 for planning phase)
     if mrn is None:
-        mrn = 2075253
+        mrn = 0
     if csn is None:
-        csn = 18303177
+        csn = 0
 
     # Use provided prompt or default
     if user_prompt is None:
@@ -194,7 +205,9 @@ def main(user_prompt: str = None, mrn: int = None, csn: int = None):
     print(f"MRN: {mrn}, CSN: {csn}\n")
 
     try:
-        result = conversational_planning_agent(user_prompt, mrn, csn)
+        # Convert user prompt to messages format
+        messages = [{"role": "user", "content": user_prompt}]
+        result = conversational_planning_agent(messages, mrn, csn)
         
         print("=== RESULT ===")
         print(f"Response Type: {result['response_type']}")

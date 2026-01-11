@@ -65,7 +65,7 @@ class DatasetCache:
             with open(file_path, 'r') as fp:
                 return json.load(fp)
         except FileNotFoundError:
-            logger.warning(f"File not found: {file_path}")
+            logger.debug(f"File not found: {file_path}")
             return None
         except json.JSONDecodeError as e:
             logger.error(f"JSON decode error in {file_path}: {e}")
@@ -160,7 +160,8 @@ class DatasetCache:
                 patient_data = self._load_json_file(dataset_path)
 
                 if patient_data is None or not isinstance(patient_data, list):
-                    logger.error(f"Invalid or missing patient data for dataset: {dataset_name}")
+                    # Use debug level instead of error - missing datasets are expected during planning
+                    logger.debug(f"Invalid or missing patient data for dataset: {dataset_name}")
                     return None
 
                 self._patients_cache[dataset_name] = patient_data

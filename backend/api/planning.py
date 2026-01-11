@@ -61,6 +61,8 @@ def conversational_plan(data: Dict[str, Any] = Body(...), current_user: str = De
     """Generate a response using the conversational planning agent."""
     try:
         user_prompt = data.get("prompt")
+        # MRN and CSN are placeholders (0) during planning
+        # They will be set to actual values by the workflow executor at execution time
         mrn = data.get("mrn", 0)
         csn = data.get("csn", 0)
         dataset = data.get("dataset")
@@ -189,6 +191,7 @@ def edit_plan_step(data: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
         ]
 
         # Use conversational planning agent to handle the edit
+        # MRN and CSN are always 0 during planning (placeholders for execution time)
         result = conversational_planning_agent(
             messages=messages,
             mrn=0,
