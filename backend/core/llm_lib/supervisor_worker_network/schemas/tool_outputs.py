@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Union, Any
 
 class KeywordCountOutput(BaseModel):
     count: int
@@ -15,5 +15,4 @@ class AnalyzeNoteWithSpanAndReasonOutput(BaseModel):
     reasoning: str
 
 class FilterMedicationOutput(BaseModel):
-    pandas_expression: str
-    explanation: Optional[str] = None
+    order_ids: List[int]

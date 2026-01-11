@@ -4,11 +4,11 @@ from core.llm_lib.supervisor_worker_network.tools.base import Tool
 from core.llm_lib.supervisor_worker_network.schemas.tool_inputs import (
     GetMedicationsIdsInput, ReadMedicationInput, HighlightMedicationInput, FilterMedicationInput
 )
-from core.llm_lib.supervisor_worker_network.schemas.tool_outputs import FilterMedicationOutput
 from core.llm_lib.supervisor_worker_network.schemas.table_schemas import MEDICATION_TABLE_SCHEMA
 import json
 import pandas as pd
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
+from pydantic import BaseModel
 
 class GetMedicationsIds(Tool):
     def __init__(self, dataset: str = None):
@@ -174,6 +174,17 @@ class HighlightMedication(Tool):
             return inputs.medication_name
         return ""
 
+class FilterCondition(BaseModel):
+    column: str
+    operator: str  # '==', '!=', '>', '<', '>=', '<=', 'contains', 'isin', 'between', 'isna', 'notna', 'regex', 'starts_with'
+    value: Optional[Union[str, int, float, List[str], List[int], List[float]]] = None
+    value_type: str = "literal"  # 'literal' (compare against value) or 'column' (compare against another column)
+
+class FilterMedicationLLMOutput(BaseModel):
+    logic_operator: str = "AND"  # "AND" or "OR"
+    filters: List[FilterCondition]
+    explanation: Optional[str] = None
+
 class FilterMedication(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "SickKids ICU"  # Default dataset
@@ -218,20 +229,29 @@ class FilterMedication(Tool):
         }
 
     def __call__(self, inputs: FilterMedicationInput) -> List[int]:
-        # 1. Fetch data
-        medications = []
+        # 1. Fetch Medications for the specific Patient/Encounter
+        medications_list = []
         for patient in self.dataset:
-            if patient['mrn'] == inputs.mrn:
-                for encounter in patient['encounters']:
-                    if int(encounter['csn']) == int(inputs.csn):
-                        medications = encounter['medications']
+            if patient.get('mrn') == inputs.mrn:
+                for encounter in patient.get('encounters', []):
+                    if int(encounter.get('csn')) == int(inputs.csn):
+                        # Extract medications and re-attach context IDs to match Golden Schema
+                        for med in encounter.get('medications', []):
+                            row = med.copy()
+                            row['mrn'] = inputs.mrn
+                            row['pat_enc_csn_id'] = inputs.csn
+                            medications_list.append(row)
                         break
+                break
         
-        if not medications:
+        if not medications_list:
             return []
 
         # 2. Convert to DataFrame
-        df = pd.DataFrame(medications)
+        df = pd.DataFrame(medications_list)
+        
+        if df.empty:
+            return []
         
         # 2b. Pre-process Date Columns if they exist
         date_cols = ['order_datetime', 'order_start_datetime', 'order_end_datetime', 'admin_datetime', 'etl_datetime']
@@ -244,52 +264,119 @@ class FilterMedication(Tool):
         # This ensures the LLM knows about all potential columns even if they aren't in this record.
         metadata_str = "\n".join([f"- {col}" for col in MEDICATION_TABLE_SCHEMA])
 
-        # 4. Optimized System Prompt (The "Super-Prompt")
+        # 4. Optimized System Prompt (Structured Filter Model)
         system_prompt = f"""
         You are a highly capable data analyst assistant specializing in medical data filtering.
-        Your task is to translate a user's natural language request into a single Python/Pandas boolean indexing expression.
+        Your task is to translate a user's natural language request into a list of structured filter conditions.
 
-        ### DataFrame Context (df):
+        ### DataFrame Context:
         The medication table contains the following columns:
         {metadata_str}
 
-        ### Syntax Guidelines:
-        1. **String Matching**: Always use `.str.contains('term', case=False, na=False)` for partial matches or `.str.lower() == 'term'` for exact matches.
-        2. **Numerical Filters**: Use standard operators: `>`, `<`, `>=`, `<=`, `==`. 
-        3. **Set Matching**: Use `.isin(['val1', 'val2'])` for multiple categories.
-        4. **Compound Logic (CRITICAL)**: Always wrap EVERY individual condition in parentheses. Example: `(df['col'] > 5) & (df['col'] < 10)`. Failure to use parentheses will cause a syntax error.
-        5. **Date Filtering**: Use `pd.to_datetime` comparisons or `.dt` accessors. Example: `(df['order_datetime'].dt.date == pd.Timestamp('2026-01-10').date())`. 
-        6. **Clinical Intelligence**: 
-           - Map "dosage" or "dose" to 'dosage_order_amount' unless user specifies "given" amount.
-           - Map "route" to 'medication_route'.
-           - Map "status" or "action" to 'admin_action'.
+        ### Operator Guidelines:
+        1. **'==' / '!='**: For exact matches (e.g., status, route).
+        2. **'>' / '<' / '>=' / '<='**: For numerical values (e.g., dose amount).
+        3. **'contains'**: For partial string matches (e.g., medication names).
+        4. **'isin'**: For matching against a list of values.
+        5. **'between'**: For numeric or date ranges. Give a list [start, end].
+        6. **'isna' / 'notna'**: To check for missing or present values.
+        7. **'regex'**: For regular expression matching.
+        8. **'starts_with'**: For prefix matching.
 
-        ### Rules:
-        - Return ONLY the string expression that would go inside `df[...]`.
-        - Do NOT include 'df[' or ']' around the whole response. 
-        - CRITICAL: Every comparison condition must be enclosed in parentheses when using `&` or `|`.
+        ### Column-to-Column Comparison:
+        - If the user asks to compare two columns (e.g., "given amount less than ordered amount"), set `value_type` to "column" and `value` to the name of the second column.
 
-        ### Example:
-        Prompt: "Show medications given orally with dose over 10"
-        Output: "(df['medication_route'].str.lower() == 'oral') & (df['dosage_order_amount'] > 10)"
+        ### Logical Rules:
+        - If the user specifies multiple required conditions, use `logic_operator: "AND"`.
+        - If they say "either/or" or "any of", use `logic_operator: "OR"`.
+        - Map clinical terms: "dosage/dose" -> 'dosage_order_amount', "route" -> 'medication_route', "status" -> 'admin_action'.
+
+        ### Date Handling:
+        - Dates are already pre-converted. Use standard comparison operators (>, <, ==) for date columns.
+        - Current system date: 2026-01-10. Use this for relative queries like "ordered today".
+
+        ### Examples:
+        - "Medications given today": [[{{"column": "order_datetime", "operator": ">=", "value": "2026-01-10T00:00:00"}}, {{"column": "admin_action", "operator": "==", "value": "Given"}}]]
+        - "Dose less than ordered": [[{{"column": "dosage_given_amount", "operator": "<", "value": "dosage_order_amount", "value_type": "column"}}]]
+        - "Sodium Chloride 0.9%": [[{{"column": "medication_name", "operator": "regex", "value": "Sodium Chloride.*0\\.9%"}}]]
+        - "Pain meds (Ibuprofen/Acetaminophen)": [[{{"column": "medication_name", "operator": "isin", "value": ["Ibuprofen", "Acetaminophen"]}}]]
+        - "Oral meds starting with 'A'": [[{{"column": "medication_route", "operator": "==", "value": "Oral"}}, {{"column": "medication_name", "operator": "starts_with", "value": "A"}}]]
         """
 
         try:
             response = call_gpt_parsed(
                 input_text=inputs.prompt,
-                json_schema=FilterMedicationOutput,
+                json_schema=FilterMedicationLLMOutput,
                 model_name="GPT 4o",
                 system_message=system_prompt
             )
-            pandas_expr = response.pandas_expression
-            print(f"DEBUG: Generated expression: {pandas_expr}") 
             
-            # 5. Execution
-            # Using eval() on the local df variable
-            result_df = df[eval(pandas_expr)]
+            if not response.filters:
+                return []
+
+            # 5. Execution (Structured & Safe)
+            # Instead of eval(), we build the mask manually
+            final_mask = None
+            
+            for f in response.filters:
+                col = f.column
+                op = f.operator
+                val = f.value
+                
+                if col not in df.columns:
+                    continue
+                    
+                # Determine comparison value (literal or column)
+                if f.value_type == "column" and isinstance(val, str) and val in df.columns:
+                    cmp_val = df[val]
+                else:
+                    cmp_val = val
+
+                mask = None
+                if op == '==':
+                    mask = df[col] == cmp_val
+                elif op == '!=':
+                    mask = df[col] != cmp_val
+                elif op == '>':
+                    mask = df[col] > cmp_val
+                elif op == '<':
+                    mask = df[col] < cmp_val
+                elif op == '>=':
+                    mask = df[col] >= cmp_val
+                elif op == '<=':
+                    mask = df[col] <= cmp_val
+                elif op == 'contains':
+                    mask = df[col].astype(str).str.contains(str(val), case=False, na=False)
+                elif op == 'regex':
+                    mask = df[col].astype(str).str.contains(str(val), case=False, na=False, regex=True)
+                elif op == 'starts_with':
+                    mask = df[col].astype(str).str.startswith(str(val), na=False)
+                elif op == 'isin':
+                    mask = df[col].isin(val if isinstance(val, list) else [val])
+                elif op == 'between':
+                    if isinstance(val, list) and len(val) == 2:
+                        mask = df[col].between(val[0], val[1])
+                elif op == 'isna':
+                    mask = df[col].isna()
+                elif op == 'notna':
+                    mask = df[col].notna()
+
+                if mask is not None:
+                    if final_mask is None:
+                        final_mask = mask
+                    else:
+                        if response.logic_operator == "OR":
+                            final_mask |= mask
+                        else:
+                            final_mask &= mask
+
+            if final_mask is None:
+                return [int(oid) for oid in df['order_id'].unique().tolist() if oid is not None]
+
+            result_df = df[final_mask]
             
             # Return final list of order_ids
-            return [int(oid) for oid in result_df['order_id'].tolist() if oid is not None]
+            return [int(oid) for oid in result_df['order_id'].unique().tolist() if oid is not None]
 
         except Exception as e:
             print(f"FilterMedication failed: {e}")

@@ -62,6 +62,26 @@ SYNTHETIC_PATIENT_DATA = [
                         "admin_action": "Given",
                         "order_datetime": "2026-01-10T11:45:00Z",
                         "dosage_given_amount": 50
+                    },
+                    {
+                        "order_id": 105,
+                        "medication_name": "Sodium Chloride 0.9% (Normal Saline)",
+                        "dosage_order_amount": 1000,
+                        "dosage_order_unit": "mL",
+                        "medication_route": "IV",
+                        "admin_action": "Given",
+                        "order_datetime": "2025-12-31T23:59:59Z", # Test year crossover
+                        "dosage_given_amount": 0 # Test numeric 0
+                    },
+                    {
+                        "order_id": 106,
+                        "medication_name": "Dopamine",
+                        "dosage_order_amount": 5,
+                        "dosage_order_unit": "mcg/kg/min",
+                        "medication_route": "IV",
+                        "admin_action": "Given",
+                        "order_datetime": "2026-01-10T12:00:00Z",
+                        "dosage_given_amount": 4 # Test column comparison (given < ordered)
                     }
                 ]
             }
@@ -81,8 +101,7 @@ def test_tool_with_prompt(user_prompt: str):
     tool_input = FilterMedicationInput(
         mrn=12345,
         csn=67890,
-        prompt=user_prompt,
-        table_schema=MEDICATION_TABLE_SCHEMA
+        prompt=user_prompt
     )
     
     try:
@@ -111,3 +130,18 @@ if __name__ == "__main__":
     
     # 5. Semantic overlap (Pain medications)
     test_tool_with_prompt("Medications used for pain (Ibuprofen, Acetaminophen, Fentanyl) with doses above 40")
+
+    # 6. REGEX Test (Concentrations)
+    test_tool_with_prompt("Find all Sodium Chloride with concentration 0.9%")
+
+    # 7. Column-to-Column Comparison
+    test_tool_with_prompt("Dose given less than the dose ordered")
+
+    # 8. Prefix matching (Starts With)
+    test_tool_with_prompt("Medications starting with 'A'")
+
+    # 9. Year Crossover
+    test_tool_with_prompt("Medications ordered in late 2025")
+
+    # 10. Numeric 0 vs None
+    test_tool_with_prompt("Find medications where the given amount is exactly 0")

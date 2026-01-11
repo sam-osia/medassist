@@ -74,7 +74,8 @@ from core.llm_lib.supervisor_worker_network.schemas.tool_inputs import (
 from core.llm_lib.supervisor_worker_network.schemas.tool_outputs import (
     KeywordCountOutput,
     IdentifyFlagOutput,
-    AnalyzeNoteWithSpanAndReasonOutput
+    AnalyzeNoteWithSpanAndReasonOutput,
+    FilterMedicationOutput
 )
 
 
@@ -126,6 +127,7 @@ def _pydantic_output_model_map() -> Dict[str, type[BaseModel]]:
         "keyword_count": KeywordCountOutput,
         "identify_flag": IdentifyFlagOutput,
         "analyze_note_with_span_and_reason": AnalyzeNoteWithSpanAndReasonOutput,
+        "filter_medication": FilterMedicationOutput,
     }
 
 

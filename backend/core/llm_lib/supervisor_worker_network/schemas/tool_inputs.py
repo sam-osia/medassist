@@ -77,7 +77,6 @@ class FilterMedicationInput(BaseModel):
     mrn: int
     csn: int
     prompt: str
-    table_schema: Optional[List[str]] = None
 
 # Diagnosis Tool Models
 class GetDiagnosisIdsInput(BaseModel):
