@@ -7,8 +7,12 @@ from core.llm_lib.supervisor_worker_network.schemas.tool_inputs import (
 from core.llm_lib.supervisor_worker_network.schemas.table_schemas import MEDICATION_TABLE_SCHEMA
 import json
 import pandas as pd
+import logging
+import re
 from typing import List, Dict, Any, Optional, Union
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 class GetMedicationsIds(Tool):
     def __init__(self, dataset: str = None):
@@ -174,21 +178,30 @@ class HighlightMedication(Tool):
             return inputs.medication_name
         return ""
 
-class FilterCondition(BaseModel):
-    column: str
-    operator: str  # '==', '!=', '>', '<', '>=', '<=', 'contains', 'isin', 'between', 'isna', 'notna', 'regex', 'starts_with'
-    value: Optional[Union[str, int, float, List[str], List[int], List[float]]] = None
-    value_type: str = "literal"  # 'literal' (compare against value) or 'column' (compare against another column)
-
 class FilterMedicationLLMOutput(BaseModel):
-    logic_operator: str = "AND"  # "AND" or "OR"
-    filters: List[FilterCondition]
+    pandas_expression: str  # The boolean mask expression, e.g., "(df['dosage_order_amount'] > 10) & (df['medication_route'] == 'Oral')"
     explanation: Optional[str] = None
+
+def is_safe_eval_expression(expression: str) -> bool:
+    """Check for dangerous keywords to prevent code injection."""
+    forbidden = {
+        'import', 'os', 'sys', 'rm', 'shutil', 'subprocess', 'open', 'write', 'read',
+        '__builtins__', '__dict__', '__class__', '__base__', '__subclasses__',
+        'eval', 'exec', 'getattr', 'setattr', 'delattr', 'classmethod', 'staticmethod',
+        'property', 'type', 'builtins', 'drop', 'pop', 'inplace', 'clear', 'del'
+    }
+    # Check for any forbidden words as standalone tokens (basic guard)
+    tokens = re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', expression)
+    for token in tokens:
+        if token in forbidden:
+            return False
+    return True
 
 class FilterMedication(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "SickKids ICU"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
+        self.last_expression = None
 
     @property
     def name(self) -> str:
@@ -267,40 +280,24 @@ class FilterMedication(Tool):
         # 4. Optimized System Prompt (Structured Filter Model)
         system_prompt = f"""
         You are a highly capable data analyst assistant specializing in medical data filtering.
-        Your task is to translate a user's natural language request into a list of structured filter conditions.
+        Your task is to translate a user's natural language request into a valid Python Pandas boolean mask expression.
 
-        ### DataFrame Context:
-        The medication table contains the following columns:
-        {metadata_str}
+        ### Available Columns (Medication Table):
+        {json.dumps(MEDICATION_TABLE_SCHEMA, indent=2)}
 
-        ### Operator Guidelines:
-        1. **'==' / '!='**: For exact matches (e.g., status, route).
-        2. **'>' / '<' / '>=' / '<='**: For numerical values (e.g., dose amount).
-        3. **'contains'**: For partial string matches (e.g., medication names).
-        4. **'isin'**: For matching against a list of values.
-        5. **'between'**: For numeric or date ranges. Give a list [start, end].
-        6. **'isna' / 'notna'**: To check for missing or present values.
-        7. **'regex'**: For regular expression matching.
-        8. **'starts_with'**: For prefix matching.
-
-        ### Column-to-Column Comparison:
-        - If the user asks to compare two columns (e.g., "given amount less than ordered amount"), set `value_type` to "column" and `value` to the name of the second column.
-
-        ### Logical Rules:
-        - If the user specifies multiple required conditions, use `logic_operator: "AND"`.
-        - If they say "either/or" or "any of", use `logic_operator: "OR"`.
-        - Map clinical terms: "dosage/dose" -> 'dosage_order_amount', "route" -> 'medication_route', "status" -> 'admin_action'.
-
-        ### Date Handling:
-        - Dates are already pre-converted. Use standard comparison operators (>, <, ==) for date columns.
-        - Current system date: 2026-01-10. Use this for relative queries like "ordered today".
+        ### Instructions:
+        1. Output ONLY a boolean mask expression that can be used on a DataFrame named `df`.
+        2. Use standard Pandas accessors like `.str.contains(..., case=False, na=False)`, `.isin([...])`, `.between(min, max)`, or `.isna()`.
+        3. For date columns (order_datetime, admin_datetime, etc.), NEVER use `.str`. Use direct datetime comparisons like `df['order_datetime'] >= '2026-01-10'` or `df['order_datetime'].dt.date == pd.to_datetime('2026-01-10').date()`.
+        4. For column-to-column comparisons, use `df['col_a'] > df['col_b']`.
+        5. Current system date: 2026-01-10.
 
         ### Examples:
-        - "Medications given today": [[{{"column": "order_datetime", "operator": ">=", "value": "2026-01-10T00:00:00"}}, {{"column": "admin_action", "operator": "==", "value": "Given"}}]]
-        - "Dose less than ordered": [[{{"column": "dosage_given_amount", "operator": "<", "value": "dosage_order_amount", "value_type": "column"}}]]
-        - "Sodium Chloride 0.9%": [[{{"column": "medication_name", "operator": "regex", "value": "Sodium Chloride.*0\\.9%"}}]]
-        - "Pain meds (Ibuprofen/Acetaminophen)": [[{{"column": "medication_name", "operator": "isin", "value": ["Ibuprofen", "Acetaminophen"]}}]]
-        - "Oral meds starting with 'A'": [[{{"column": "medication_route", "operator": "==", "value": "Oral"}}, {{"column": "medication_name", "operator": "starts_with", "value": "A"}}]]
+        - "Medications given today": "(df['order_datetime'] >= '2026-01-10') & (df['admin_action'] == 'Given')"
+        - "Dose less than ordered": "df['dosage_given_amount'] < df['dosage_order_amount']"
+        - "Pain meds (Ibuprofen or Fentanyl)": "df['medication_name'].isin(['Ibuprofen', 'Fentanyl'])"
+        - "Oral meds starting with 'A'": "(df['medication_route'] == 'Oral') & (df['medication_name'].str.startswith('A', na=False))"
+        - "Concentration 0.9%": "df['medication_name'].str.contains('0\\.9%', case=False, na=False, regex=True)"
         """
 
         try:
@@ -311,73 +308,44 @@ class FilterMedication(Tool):
                 system_message=system_prompt
             )
             
-            if not response.filters:
+            expr = response.pandas_expression
+            self.last_expression = expr
+            if not expr:
                 return []
 
-            # 5. Execution (Structured & Safe)
-            # Instead of eval(), we build the mask manually
-            final_mask = None
-            
-            for f in response.filters:
-                col = f.column
-                op = f.operator
-                val = f.value
+            # 5. Security Guardrail
+            if not is_safe_eval_expression(expr):
+                error_msg = f"SECURITY ALERT: Blocked malicious expression: {expr}"
+                print(error_msg)
+                logger.warning(error_msg)
+                return []
+
+            # 6. Execution (Secure eval)
+            try:
+                # Jailed environment: no builtins, but allow pd for date conversions if needed
+                # and of course the dataframe 'df'
+                final_mask = eval(expr, {"__builtins__": {}, "pd": pd}, {"df": df})
                 
-                if col not in df.columns:
-                    continue
-                    
-                # Determine comparison value (literal or column)
-                if f.value_type == "column" and isinstance(val, str) and val in df.columns:
-                    cmp_val = df[val]
-                else:
-                    cmp_val = val
+                if final_mask is None:
+                    return []
 
-                mask = None
-                if op == '==':
-                    mask = df[col] == cmp_val
-                elif op == '!=':
-                    mask = df[col] != cmp_val
-                elif op == '>':
-                    mask = df[col] > cmp_val
-                elif op == '<':
-                    mask = df[col] < cmp_val
-                elif op == '>=':
-                    mask = df[col] >= cmp_val
-                elif op == '<=':
-                    mask = df[col] <= cmp_val
-                elif op == 'contains':
-                    mask = df[col].astype(str).str.contains(str(val), case=False, na=False)
-                elif op == 'regex':
-                    mask = df[col].astype(str).str.contains(str(val), case=False, na=False, regex=True)
-                elif op == 'starts_with':
-                    mask = df[col].astype(str).str.startswith(str(val), na=False)
-                elif op == 'isin':
-                    mask = df[col].isin(val if isinstance(val, list) else [val])
-                elif op == 'between':
-                    if isinstance(val, list) and len(val) == 2:
-                        mask = df[col].between(val[0], val[1])
-                elif op == 'isna':
-                    mask = df[col].isna()
-                elif op == 'notna':
-                    mask = df[col].notna()
+                result_df = df[final_mask]
+                return [int(oid) for oid in result_df['order_id'].unique().tolist() if oid is not None]
 
-                if mask is not None:
-                    if final_mask is None:
-                        final_mask = mask
-                    else:
-                        if response.logic_operator == "OR":
-                            final_mask |= mask
-                        else:
-                            final_mask &= mask
-
-            if final_mask is None:
-                return [int(oid) for oid in df['order_id'].unique().tolist() if oid is not None]
-
-            result_df = df[final_mask]
-            
-            # Return final list of order_ids
-            return [int(oid) for oid in result_df['order_id'].unique().tolist() if oid is not None]
+            except Exception as e:
+                # Detailed logging of execution failure
+                error_msg = (
+                    f"FilterMedication execution failed for prompt '{inputs.prompt}':\n"
+                    f"Expression: {expr}\n"
+                    f"Error: {e}"
+                )
+                print(error_msg)
+                logger.error(error_msg)
+                return []
 
         except Exception as e:
-            print(f"FilterMedication failed: {e}")
+            # Detailed logging of translation/GPT failure
+            error_msg = f"FilterMedication translation failed: {e}"
+            print(error_msg)
+            logger.error(error_msg)
             return []
