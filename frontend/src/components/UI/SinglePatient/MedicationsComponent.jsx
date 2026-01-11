@@ -10,19 +10,30 @@ import {
   Paper,
   Chip,
   Box,
-  CircularProgress
+  CircularProgress,
+  Button
 } from '@mui/material';
 import {
-  Medication as MedicationIcon
+  Medication as MedicationIcon,
+  Check as CheckIcon,
+  Edit as EditIcon
 } from '@mui/icons-material';
 // Removed streaming hooks as part of simplification
 import { useProcessing } from '../../../contexts/ProcessingContext';
 import './ProcessingIndicators.css';
 
 // Individual medication row component with processing state
-const MedicationRow = ({ medication, index, isHighlighted = false, isProcessing = false }) => {
+const MedicationRow = ({
+  medication,
+  index,
+  isHighlighted = false,
+  isProcessing = false,
+  annotationMode = false,
+  isAnnotated = false,
+  onAnnotateClick
+}) => {
   const isBeingProcessed = isProcessing;
-  
+
   const formatDateTime = (dateString) => {
     if (!dateString) return 'N/A';
     try {
@@ -32,11 +43,10 @@ const MedicationRow = ({ medication, index, isHighlighted = false, isProcessing 
     }
   };
 
-
   return (
-    <TableRow 
+    <TableRow
       key={`${medication.order_id}-${medication.admin_line_num}` || index}
-      sx={{ 
+      sx={{
         '&:last-child td, &:last-child th': { border: 0 },
         backgroundColor: isHighlighted ? '#fff9c4' : (isBeingProcessed ? '#e8f5e8' : 'transparent'),
         borderLeft: isHighlighted ? '4px solid #ffa726' : 'none',
@@ -88,15 +98,36 @@ const MedicationRow = ({ medication, index, isHighlighted = false, isProcessing 
         </Typography>
       </TableCell>
       <TableCell>
-        <Typography variant="body2">
-          {medication.admin_action || 'N/A'}
-        </Typography>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <Typography variant="body2">
+            {medication.admin_action || 'N/A'}
+          </Typography>
+          {annotationMode && (
+            <Button
+              size="small"
+              variant={isAnnotated ? 'outlined' : 'contained'}
+              color={isAnnotated ? 'success' : 'primary'}
+              startIcon={isAnnotated ? <CheckIcon /> : <EditIcon />}
+              onClick={() => onAnnotateClick(medication)}
+            >
+              {isAnnotated ? 'Edit' : 'Annotate'}
+            </Button>
+          )}
+        </Box>
       </TableCell>
     </TableRow>
   );
 };
 
-const MedicationsComponent = ({ medications = [], mrn, csn, highlightedItems = [] }) => {
+const MedicationsComponent = ({
+  medications = [],
+  mrn,
+  csn,
+  highlightedItems = [],
+  annotationMode = false,
+  annotationMap = new Map(),
+  onAnnotateClick
+}) => {
   // Access streaming events context
   // Use processing context
   const { isItemProcessing, getProcessingCount } = useProcessing();
@@ -188,12 +219,15 @@ const MedicationsComponent = ({ medications = [], mrn, csn, highlightedItems = [
             </TableHead>
             <TableBody>
               {medications.map((medication, index) => (
-                <MedicationRow 
+                <MedicationRow
                   key={`${medication.order_id}-${medication.admin_line_num}` || index}
                   medication={medication}
                   index={index}
                   isHighlighted={highlightedItems.includes(medication.order_id)}
                   isProcessing={isItemProcessing('medications', medication.order_id)}
+                  annotationMode={annotationMode}
+                  isAnnotated={annotationMap.has(String(medication.order_id))}
+                  onAnnotateClick={onAnnotateClick}
                 />
               ))}
             </TableBody>

@@ -6,13 +6,16 @@ import {
   Box,
   Chip,
   Grid,
-  Stack
+  Stack,
+  Button
 } from '@mui/material';
 import {
   ShowChart as FlowsheetIcon,
   Medication as MedicationIcon,
   Troubleshoot as DiagnosisIcon,
-  Description as NoteIcon
+  Description as NoteIcon,
+  Check as CheckIcon,
+  Edit as EditIcon
 } from '@mui/icons-material';
 
 const MetricItem = ({ icon: Icon, count, label, color }) => (
@@ -46,7 +49,14 @@ const MetricItem = ({ icon: Icon, count, label, color }) => (
   </Stack>
 );
 
-const EncounterCard = ({ encounter, metrics: metricsProp, patientMrn }) => {
+const EncounterCard = ({
+  encounter,
+  metrics: metricsProp,
+  patientMrn,
+  annotationMode = false,
+  isAnnotated = false,
+  onAnnotateClick
+}) => {
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     try {
@@ -56,16 +66,24 @@ const EncounterCard = ({ encounter, metrics: metricsProp, patientMrn }) => {
     }
   };
 
+  const handleAnnotateClick = (e) => {
+    e.stopPropagation(); // Prevent RadioGroup selection
+    e.preventDefault();
+    if (onAnnotateClick) {
+      onAnnotateClick();
+    }
+  };
+
   const metrics = metricsProp || encounter.metrics || {};
-  const totalRecords = (metrics.flowsheet_count || 0) + 
-                      (metrics.medication_count || 0) + 
-                      (metrics.diagnosis_count || 0) + 
+  const totalRecords = (metrics.flowsheet_count || 0) +
+                      (metrics.medication_count || 0) +
+                      (metrics.diagnosis_count || 0) +
                       (metrics.note_count || 0);
 
   return (
-    <Card 
-      variant="outlined" 
-      sx={{ 
+    <Card
+      variant="outlined"
+      sx={{
         border: '1px solid #e0e0e0',
         '&:hover': {
           boxShadow: 1,
@@ -77,41 +95,41 @@ const EncounterCard = ({ encounter, metrics: metricsProp, patientMrn }) => {
     >
       <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={2.5}>
+          <Grid item xs={annotationMode ? 2 : 2.5}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
               CSN: {encounter.csn}
             </Typography>
           </Grid>
-          
-          <Grid item xs={1.9}>
-            <MetricItem 
+
+          <Grid item xs={annotationMode ? 1.6 : 1.9}>
+            <MetricItem
               icon={NoteIcon}
               count={metrics.note_count || 0}
               label="Notes"
               color="icon"
             />
           </Grid>
-          
-          <Grid item xs={1.9}>
-            <MetricItem 
+
+          <Grid item xs={annotationMode ? 1.6 : 1.9}>
+            <MetricItem
               icon={MedicationIcon}
               count={metrics.medication_count || 0}
               label="Meds"
               color="icon"
             />
           </Grid>
-          
-          <Grid item xs={1.9}>
-            <MetricItem 
+
+          <Grid item xs={annotationMode ? 1.6 : 1.9}>
+            <MetricItem
               icon={FlowsheetIcon}
               count={metrics.flowsheet_count || 0}
               label="Flow"
               color="icon"
             />
           </Grid>
-          
-          <Grid item xs={1.9}>
-            <MetricItem 
+
+          <Grid item xs={annotationMode ? 1.6 : 1.9}>
+            <MetricItem
               icon={DiagnosisIcon}
               count={metrics.diagnosis_count || 0}
               label="Diag"
@@ -119,17 +137,33 @@ const EncounterCard = ({ encounter, metrics: metricsProp, patientMrn }) => {
             />
           </Grid>
 
-          <Grid item xs={1.9}>
+          <Grid item xs={annotationMode ? 1.6 : 1.9}>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <Chip 
-                label={`${totalRecords} Total`} 
-                size="small" 
-                color="primary" 
+              <Chip
+                label={`${totalRecords} Total`}
+                size="small"
+                color="primary"
                 variant="filled"
                 sx={{ height: 20, fontSize: '0.75rem' }}
               />
             </Box>
           </Grid>
+
+          {annotationMode && (
+            <Grid item xs={2}>
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Button
+                  size="small"
+                  variant={isAnnotated ? 'outlined' : 'contained'}
+                  color={isAnnotated ? 'success' : 'primary'}
+                  startIcon={isAnnotated ? <CheckIcon /> : <EditIcon />}
+                  onClick={handleAnnotateClick}
+                >
+                  {isAnnotated ? 'Edit' : 'Annotate'}
+                </Button>
+              </Box>
+            </Grid>
+          )}
         </Grid>
       </CardContent>
     </Card>
