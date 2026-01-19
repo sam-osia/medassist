@@ -183,6 +183,7 @@ const AnnotationDialog = ({
       await onSave(formValues);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to save annotation');
+    } finally {
       setSaving(false);
     }
   };

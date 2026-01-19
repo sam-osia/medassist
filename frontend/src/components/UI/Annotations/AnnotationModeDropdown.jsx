@@ -49,24 +49,24 @@ const AnnotationModeDropdown = ({
   const open = Boolean(anchorEl);
 
   useEffect(() => {
+    const fetchGroups = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await annotationsService.listGroups(projectName);
+        setGroups(response.data.groups || []);
+      } catch (err) {
+        setError('Failed to load annotation groups');
+        console.error('Error fetching annotation groups:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     if (projectName) {
       fetchGroups();
     }
   }, [projectName]);
-
-  const fetchGroups = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await annotationsService.listGroups(projectName);
-      setGroups(response.data.groups || []);
-    } catch (err) {
-      setError('Failed to load annotation groups');
-      console.error('Error fetching annotation groups:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);
