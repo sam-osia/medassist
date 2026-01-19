@@ -20,6 +20,16 @@ class ToolResult:
 
 
 @dataclass
+class StreamChunk:
+    """A chunk of streamed response from an LLM."""
+    content: str                                  # Delta text content
+    is_final: bool = False                        # True for the last chunk
+    tool_calls: Optional[List[ToolCall]] = None   # Tool calls (usually in final chunk)
+    input_tokens: Optional[int] = None            # Only populated in final chunk
+    output_tokens: Optional[int] = None           # Only populated in final chunk
+
+
+@dataclass
 class LLMResult:
     """Unified result from any LLM call."""
     content: str                                              # The text response

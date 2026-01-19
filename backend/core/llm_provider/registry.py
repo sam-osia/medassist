@@ -16,6 +16,7 @@ class ModelConfig:
     supports_structured: bool     # Can do structured/JSON output
     supports_vision: bool         # Can process images
     supports_tools: bool          # Can do function/tool calling
+    supports_structured_with_tools: bool = False  # Can do structured output + tools together
 
 
 # Central registry - single source of truth for all models

@@ -2,13 +2,13 @@
 
 import json
 import os
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, Generator, List, Optional, Type, Union
 
 from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel
 
-from .base import BaseProvider, ProviderResponse, ToolDefinition
+from .base import BaseProvider, ProviderResponse, ProviderStreamChunk, ToolDefinition
 from ..result import ToolCall
 
 load_dotenv()
@@ -74,13 +74,40 @@ class OpenAIProvider(BaseProvider):
         system: Optional[str] = None,
         temperature: float = 1.0,
         max_tokens: int = 8192,
-    ) -> ProviderResponse:
-        """Make a standard completion call."""
+        schema: Optional[Type[BaseModel]] = None,
+        tools: Optional[List[ToolDefinition]] = None,
+        tool_choice: Union[str, Dict[str, Any]] = "auto",
+        stream: bool = False,
+    ) -> Union[ProviderResponse, Generator[ProviderStreamChunk, None, None]]:
+        """Unified call method with optional structured output, tools, and streaming."""
         full_messages = self._build_messages(messages, system)
 
+        if stream:
+            return self._call_stream(
+                model_id, full_messages, temperature, max_tokens, schema, tools, tool_choice
+            )
+
+        # Non-streaming calls
+        if schema and not tools:
+            return self._call_structured(model_id, full_messages, schema, temperature, max_tokens)
+        elif tools:
+            return self._call_with_tools(
+                model_id, full_messages, tools, tool_choice, temperature, max_tokens
+            )
+        else:
+            return self._call_basic(model_id, full_messages, temperature, max_tokens)
+
+    def _call_basic(
+        self,
+        model_id: str,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+    ) -> ProviderResponse:
+        """Make a basic completion call."""
         response = self.client.chat.completions.create(
             model=model_id,
-            messages=full_messages,
+            messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
         )
@@ -92,21 +119,18 @@ class OpenAIProvider(BaseProvider):
             raw_response=response,
         )
 
-    def call_structured(
+    def _call_structured(
         self,
         model_id: str,
         messages: List[Dict[str, str]],
         schema: Type[BaseModel],
-        system: Optional[str] = None,
-        temperature: float = 1.0,
-        max_tokens: int = 8192,
+        temperature: float,
+        max_tokens: int,
     ) -> ProviderResponse:
         """Make a structured output call using OpenAI's native parsing."""
-        full_messages = self._build_messages(messages, system)
-
         response = self.client.beta.chat.completions.parse(
             model=model_id,
-            messages=full_messages,
+            messages=messages,
             response_format=schema,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -122,24 +146,22 @@ class OpenAIProvider(BaseProvider):
             raw_response=response,
         )
 
-    def call_with_tools(
+    def _call_with_tools(
         self,
         model_id: str,
         messages: List[Dict[str, str]],
         tools: List[ToolDefinition],
-        system: Optional[str] = None,
-        temperature: float = 1.0,
-        max_tokens: int = 8192,
-        tool_choice: Union[str, Dict[str, Any]] = "auto",
+        tool_choice: Union[str, Dict[str, Any]],
+        temperature: float,
+        max_tokens: int,
     ) -> ProviderResponse:
         """Make a call with tool/function calling support."""
-        full_messages = self._build_messages(messages, system)
         openai_tools = self._convert_tools(tools)
         openai_tool_choice = self._convert_tool_choice(tool_choice)
 
         response = self.client.chat.completions.create(
             model=model_id,
-            messages=full_messages,
+            messages=messages,
             tools=openai_tools,
             tool_choice=openai_tool_choice,
             temperature=temperature,
@@ -169,6 +191,107 @@ class OpenAIProvider(BaseProvider):
             raw_response=response,
         )
 
+    def _call_stream(
+        self,
+        model_id: str,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+        schema: Optional[Type[BaseModel]],
+        tools: Optional[List[ToolDefinition]],
+        tool_choice: Union[str, Dict[str, Any]],
+    ) -> Generator[ProviderStreamChunk, None, None]:
+        """Stream a call, yielding chunks as they arrive."""
+        kwargs: Dict[str, Any] = {
+            "model": model_id,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        }
+
+        # Add tools if provided
+        if tools:
+            kwargs["tools"] = self._convert_tools(tools)
+            kwargs["tool_choice"] = self._convert_tool_choice(tool_choice)
+
+        # For structured output with streaming, use JSON mode
+        if schema and not tools:
+            kwargs["response_format"] = {"type": "json_object"}
+            # Add schema hint to help the model
+            schema_json = schema.model_json_schema()
+            schema_hint = f"\n\nYou must respond with valid JSON matching this schema: {json.dumps(schema_json)}"
+            if messages and messages[-1]["role"] == "user":
+                messages = messages.copy()
+                messages[-1] = {
+                    "role": "user",
+                    "content": messages[-1]["content"] + schema_hint
+                }
+                kwargs["messages"] = messages
+
+        response = self.client.chat.completions.create(**kwargs)
+
+        accumulated_content = ""
+        # Track tool calls by index: {index: {"id": str, "name": str, "arguments": str}}
+        tool_call_accumulators: Dict[int, Dict[str, str]] = {}
+        final_input_tokens = 0
+        final_output_tokens = 0
+
+        for chunk in response:
+            # Handle usage info (comes in final chunk)
+            if chunk.usage:
+                final_input_tokens = chunk.usage.prompt_tokens
+                final_output_tokens = chunk.usage.completion_tokens
+
+            # Handle content delta
+            if chunk.choices:
+                delta = chunk.choices[0].delta
+
+                # Text content
+                if delta and delta.content:
+                    accumulated_content += delta.content
+                    yield ProviderStreamChunk(content=delta.content)
+
+                # Tool calls (streamed incrementally)
+                if delta and delta.tool_calls:
+                    for tc_delta in delta.tool_calls:
+                        idx = tc_delta.index
+                        if idx not in tool_call_accumulators:
+                            tool_call_accumulators[idx] = {
+                                "id": "",
+                                "name": "",
+                                "arguments": ""
+                            }
+                        if tc_delta.id:
+                            tool_call_accumulators[idx]["id"] = tc_delta.id
+                        if tc_delta.function:
+                            if tc_delta.function.name:
+                                tool_call_accumulators[idx]["name"] = tc_delta.function.name
+                            if tc_delta.function.arguments:
+                                tool_call_accumulators[idx]["arguments"] += tc_delta.function.arguments
+
+        # Build final tool calls
+        final_tool_calls = None
+        if tool_call_accumulators:
+            final_tool_calls = [
+                ToolCall(
+                    id=tc["id"],
+                    name=tc["name"],
+                    arguments=json.loads(tc["arguments"]) if tc["arguments"] else {},
+                )
+                for tc in tool_call_accumulators.values()
+            ]
+
+        # Yield final chunk with metadata
+        yield ProviderStreamChunk(
+            content="",
+            is_final=True,
+            tool_calls=final_tool_calls,
+            input_tokens=final_input_tokens,
+            output_tokens=final_output_tokens,
+        )
+
 
 def main():
     """Run OpenAI provider tests."""
@@ -177,7 +300,7 @@ def main():
     print("=" * 60)
 
     provider = OpenAIProvider()
-    model_id = "gpt-4o-mini-2024-07-18"  # Use cheaper model for tests
+    model_id = "gpt-4o-mini-2024-07-18"
 
     # Test 1: Simple call
     print("\n--- Test 1: Simple Call ---")
@@ -200,7 +323,7 @@ def main():
             name: str
             age: int
 
-        response = provider.call_structured(
+        response = provider.call(
             model_id=model_id,
             messages=[
                 {
@@ -240,7 +363,7 @@ def main():
             )
         ]
 
-        response = provider.call_with_tools(
+        response = provider.call(
             model_id=model_id,
             messages=[{"role": "user", "content": "What time is it in Tokyo?"}],
             tools=tools,
@@ -252,6 +375,60 @@ def main():
             for tc in response.tool_calls:
                 print(f"  - {tc.name}({tc.arguments})")
         print(f"Tokens: {response.input_tokens} in, {response.output_tokens} out")
+        print("PASS")
+    except Exception as e:
+        print(f"FAIL: {e}")
+
+    # Test 4: Streaming basic
+    print("\n--- Test 4: Streaming Basic ---")
+    try:
+        stream = provider.call(
+            model_id=model_id,
+            messages=[{"role": "user", "content": "Count from 1 to 5, one number per line."}],
+            temperature=0,
+            stream=True,
+        )
+        print("Streamed content: ", end="")
+        for chunk in stream:
+            if chunk.content:
+                print(chunk.content, end="", flush=True)
+            if chunk.is_final:
+                print(f"\nFinal - Tokens: {chunk.input_tokens} in, {chunk.output_tokens} out")
+        print("PASS")
+    except Exception as e:
+        print(f"FAIL: {e}")
+
+    # Test 5: Streaming with tools
+    print("\n--- Test 5: Streaming with Tools ---")
+    try:
+        tools = [
+            ToolDefinition(
+                name="get_weather",
+                description="Get weather for a location",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string", "description": "City name"}
+                    },
+                    "required": ["location"],
+                },
+            )
+        ]
+
+        stream = provider.call(
+            model_id=model_id,
+            messages=[{"role": "user", "content": "What's the weather in Paris?"}],
+            tools=tools,
+            temperature=0,
+            stream=True,
+        )
+        print("Streamed: ", end="")
+        for chunk in stream:
+            if chunk.content:
+                print(chunk.content, end="", flush=True)
+            if chunk.is_final:
+                print(f"\nTool calls: {chunk.tool_calls}")
+                print(f"Tokens: {chunk.input_tokens} in, {chunk.output_tokens} out")
         print("PASS")
     except Exception as e:
         print(f"FAIL: {e}")

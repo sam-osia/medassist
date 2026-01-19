@@ -32,7 +32,7 @@ Example Usage:
 """
 
 from .client import call, call_structured, call_with_tools
-from .result import LLMResult, ToolCall, ToolResult
+from .result import LLMResult, ToolCall, ToolResult, StreamChunk
 from .registry import (
     MODELS,
     ModelConfig,
@@ -53,6 +53,7 @@ __all__ = [
     "LLMResult",
     "ToolCall",
     "ToolResult",
+    "StreamChunk",
     "ToolDefinition",
     # Registry
     "MODELS",

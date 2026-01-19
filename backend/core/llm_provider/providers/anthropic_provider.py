@@ -2,13 +2,13 @@
 
 import json
 import os
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, Generator, List, Optional, Type, Union
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
-from .base import BaseProvider, ProviderResponse, ToolDefinition
+from .base import BaseProvider, ProviderResponse, ProviderStreamChunk, ToolDefinition
 from ..result import ToolCall
 
 load_dotenv()
@@ -65,6 +65,34 @@ class AnthropicProvider(BaseProvider):
         system: Optional[str] = None,
         temperature: float = 1.0,
         max_tokens: int = 8192,
+        schema: Optional[Type[BaseModel]] = None,
+        tools: Optional[List[ToolDefinition]] = None,
+        tool_choice: Union[str, Dict[str, Any]] = "auto",
+        stream: bool = False,
+    ) -> Union[ProviderResponse, Generator[ProviderStreamChunk, None, None]]:
+        """Unified call method with optional structured output, tools, and streaming."""
+        if stream:
+            return self._call_stream(
+                model_id, messages, system, temperature, max_tokens, schema, tools, tool_choice
+            )
+
+        # Non-streaming calls
+        if schema and not tools:
+            return self._call_structured(model_id, messages, schema, system, temperature, max_tokens)
+        elif tools:
+            return self._call_with_tools(
+                model_id, messages, tools, tool_choice, system, temperature, max_tokens
+            )
+        else:
+            return self._call_basic(model_id, messages, system, temperature, max_tokens)
+
+    def _call_basic(
+        self,
+        model_id: str,
+        messages: List[Dict[str, str]],
+        system: Optional[str],
+        temperature: float,
+        max_tokens: int,
     ) -> ProviderResponse:
         """Make a standard completion call."""
         kwargs: Dict[str, Any] = {
@@ -94,14 +122,14 @@ class AnthropicProvider(BaseProvider):
             raw_response=response,
         )
 
-    def call_structured(
+    def _call_structured(
         self,
         model_id: str,
         messages: List[Dict[str, str]],
         schema: Type[BaseModel],
-        system: Optional[str] = None,
-        temperature: float = 1.0,
-        max_tokens: int = 8192,
+        system: Optional[str],
+        temperature: float,
+        max_tokens: int,
     ) -> ProviderResponse:
         """Make a structured output call using Anthropic's tool_use pattern."""
         # Define a tool based on the Pydantic schema
@@ -157,15 +185,15 @@ class AnthropicProvider(BaseProvider):
             raw_response=response,
         )
 
-    def call_with_tools(
+    def _call_with_tools(
         self,
         model_id: str,
         messages: List[Dict[str, str]],
         tools: List[ToolDefinition],
-        system: Optional[str] = None,
-        temperature: float = 1.0,
-        max_tokens: int = 8192,
-        tool_choice: Union[str, Dict[str, Any]] = "auto",
+        tool_choice: Union[str, Dict[str, Any]],
+        system: Optional[str],
+        temperature: float,
+        max_tokens: int,
     ) -> ProviderResponse:
         """Make a call with tool/function calling support."""
         anthropic_tools = self._convert_tools(tools)
@@ -210,6 +238,110 @@ class AnthropicProvider(BaseProvider):
             raw_response=response,
         )
 
+    def _call_stream(
+        self,
+        model_id: str,
+        messages: List[Dict[str, str]],
+        system: Optional[str],
+        temperature: float,
+        max_tokens: int,
+        schema: Optional[Type[BaseModel]],
+        tools: Optional[List[ToolDefinition]],
+        tool_choice: Union[str, Dict[str, Any]],
+    ) -> Generator[ProviderStreamChunk, None, None]:
+        """Stream a call, yielding chunks as they arrive."""
+        kwargs: Dict[str, Any] = {
+            "model": model_id,
+            "messages": messages,
+            "max_tokens": max_tokens,
+        }
+
+        if system:
+            kwargs["system"] = system
+        if temperature != 1.0:
+            kwargs["temperature"] = temperature
+
+        # Add tools if provided
+        if tools:
+            kwargs["tools"] = self._convert_tools(tools)
+            kwargs["tool_choice"] = self._convert_tool_choice(tool_choice)
+
+        # For structured output, use tool pattern
+        if schema and not tools:
+            tool_definition = {
+                "name": "structured_response",
+                "description": "Provide your response in the required structured format",
+                "input_schema": schema.model_json_schema(),
+            }
+            kwargs["tools"] = [tool_definition]
+            kwargs["tool_choice"] = {"type": "tool", "name": "structured_response"}
+            # Modify system for structured output
+            kwargs["system"] = (system or "") + (
+                "\n\nYou MUST use the structured_response tool to provide your answer."
+            )
+
+        # Use the streaming context manager
+        with self.client.messages.stream(**kwargs) as stream:
+            accumulated_content = ""
+            tool_call_accumulators: Dict[str, Dict[str, Any]] = {}  # id -> {name, input_json}
+
+            for event in stream:
+                # Handle different event types
+                if event.type == "content_block_start":
+                    if hasattr(event, "content_block"):
+                        block = event.content_block
+                        if block.type == "tool_use":
+                            tool_call_accumulators[block.id] = {
+                                "name": block.name,
+                                "input_json": ""
+                            }
+
+                elif event.type == "content_block_delta":
+                    if hasattr(event, "delta"):
+                        delta = event.delta
+                        if delta.type == "text_delta":
+                            accumulated_content += delta.text
+                            yield ProviderStreamChunk(content=delta.text)
+                        elif delta.type == "input_json_delta":
+                            # Accumulate tool input JSON
+                            if hasattr(event, "index"):
+                                # Find the tool call by checking current accumulators
+                                for tool_id, tool_data in tool_call_accumulators.items():
+                                    tool_data["input_json"] += delta.partial_json
+
+            # Get final message for token counts
+            final_message = stream.get_final_message()
+
+            # Build final tool calls
+            final_tool_calls = None
+            if tool_call_accumulators:
+                final_tool_calls = []
+                for tool_id, tool_data in tool_call_accumulators.items():
+                    try:
+                        arguments = json.loads(tool_data["input_json"]) if tool_data["input_json"] else {}
+                    except json.JSONDecodeError:
+                        arguments = {}
+                    final_tool_calls.append(
+                        ToolCall(
+                            id=tool_id,
+                            name=tool_data["name"],
+                            arguments=arguments,
+                        )
+                    )
+
+            # For structured output via tools, the content is the JSON
+            if schema and not tools and final_tool_calls:
+                accumulated_content = json.dumps(final_tool_calls[0].arguments)
+
+            # Yield final chunk with metadata
+            yield ProviderStreamChunk(
+                content="",
+                is_final=True,
+                tool_calls=final_tool_calls,
+                input_tokens=final_message.usage.input_tokens,
+                output_tokens=final_message.usage.output_tokens,
+            )
+
 
 def main():
     """Run Anthropic provider tests."""
@@ -218,7 +350,7 @@ def main():
     print("=" * 60)
 
     provider = AnthropicProvider()
-    model_id = "claude-3-5-haiku-20241022"  # Use cheaper model for tests
+    model_id = "claude-3-5-haiku-20241022"
 
     # Test 1: Simple call
     print("\n--- Test 1: Simple Call ---")
@@ -241,7 +373,7 @@ def main():
             name: str
             age: int
 
-        response = provider.call_structured(
+        response = provider.call(
             model_id=model_id,
             messages=[
                 {
@@ -281,7 +413,7 @@ def main():
             )
         ]
 
-        response = provider.call_with_tools(
+        response = provider.call(
             model_id=model_id,
             messages=[{"role": "user", "content": "What time is it in Tokyo?"}],
             tools=tools,
@@ -293,6 +425,60 @@ def main():
             for tc in response.tool_calls:
                 print(f"  - {tc.name}({tc.arguments})")
         print(f"Tokens: {response.input_tokens} in, {response.output_tokens} out")
+        print("PASS")
+    except Exception as e:
+        print(f"FAIL: {e}")
+
+    # Test 4: Streaming basic
+    print("\n--- Test 4: Streaming Basic ---")
+    try:
+        stream = provider.call(
+            model_id=model_id,
+            messages=[{"role": "user", "content": "Count from 1 to 5, one number per line."}],
+            temperature=0,
+            stream=True,
+        )
+        print("Streamed content: ", end="")
+        for chunk in stream:
+            if chunk.content:
+                print(chunk.content, end="", flush=True)
+            if chunk.is_final:
+                print(f"\nFinal - Tokens: {chunk.input_tokens} in, {chunk.output_tokens} out")
+        print("PASS")
+    except Exception as e:
+        print(f"FAIL: {e}")
+
+    # Test 5: Streaming with tools
+    print("\n--- Test 5: Streaming with Tools ---")
+    try:
+        tools = [
+            ToolDefinition(
+                name="get_weather",
+                description="Get weather for a location",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string", "description": "City name"}
+                    },
+                    "required": ["location"],
+                },
+            )
+        ]
+
+        stream = provider.call(
+            model_id=model_id,
+            messages=[{"role": "user", "content": "What's the weather in Paris?"}],
+            tools=tools,
+            temperature=0,
+            stream=True,
+        )
+        print("Streamed: ", end="")
+        for chunk in stream:
+            if chunk.content:
+                print(chunk.content, end="", flush=True)
+            if chunk.is_final:
+                print(f"\nTool calls: {chunk.tool_calls}")
+                print(f"Tokens: {chunk.input_tokens} in, {chunk.output_tokens} out")
         print("PASS")
     except Exception as e:
         print(f"FAIL: {e}")

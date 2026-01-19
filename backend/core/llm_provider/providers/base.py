@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, Generator, List, Optional, Type, Union
 
 from pydantic import BaseModel
 
@@ -35,6 +35,16 @@ class ProviderResponse:
     raw_response: Optional[Any] = None
 
 
+@dataclass
+class ProviderStreamChunk:
+    """Internal streaming chunk from provider."""
+    content: str                                  # Delta text content
+    is_final: bool = False                        # True for the last chunk
+    tool_calls: Optional[List[ToolCall]] = None   # Tool calls (usually in final chunk)
+    input_tokens: Optional[int] = None            # Only populated in final chunk
+    output_tokens: Optional[int] = None           # Only populated in final chunk
+
+
 class BaseProvider(ABC):
     """Abstract base class for LLM providers.
 
@@ -50,8 +60,12 @@ class BaseProvider(ABC):
         system: Optional[str] = None,
         temperature: float = 1.0,
         max_tokens: int = 8192,
-    ) -> ProviderResponse:
-        """Make a standard completion call.
+        schema: Optional[Type[BaseModel]] = None,
+        tools: Optional[List[ToolDefinition]] = None,
+        tool_choice: Union[str, Dict[str, Any]] = "auto",
+        stream: bool = False,
+    ) -> Union[ProviderResponse, Generator[ProviderStreamChunk, None, None]]:
+        """Unified call method with optional structured output, tools, and streaming.
 
         Args:
             model_id: The provider-specific model ID
@@ -59,60 +73,12 @@ class BaseProvider(ABC):
             system: Optional system prompt
             temperature: Sampling temperature (0.0 - 2.0)
             max_tokens: Maximum tokens in response
-
-        Returns:
-            ProviderResponse with content and token counts
-        """
-        pass
-
-    @abstractmethod
-    def call_structured(
-        self,
-        model_id: str,
-        messages: List[Dict[str, str]],
-        schema: Type[BaseModel],
-        system: Optional[str] = None,
-        temperature: float = 1.0,
-        max_tokens: int = 8192,
-    ) -> ProviderResponse:
-        """Make a structured output call.
-
-        Args:
-            model_id: The provider-specific model ID
-            messages: List of messages
-            schema: Pydantic model class for response structure
-            system: Optional system prompt
-            temperature: Sampling temperature
-            max_tokens: Maximum tokens in response
-
-        Returns:
-            ProviderResponse with .parsed containing the Pydantic model instance
-        """
-        pass
-
-    @abstractmethod
-    def call_with_tools(
-        self,
-        model_id: str,
-        messages: List[Dict[str, str]],
-        tools: List[ToolDefinition],
-        system: Optional[str] = None,
-        temperature: float = 1.0,
-        max_tokens: int = 8192,
-        tool_choice: Union[str, Dict[str, Any]] = "auto",
-    ) -> ProviderResponse:
-        """Make a call with tool/function calling support.
-
-        Args:
-            model_id: The provider-specific model ID
-            messages: List of messages
-            tools: List of ToolDefinition objects
-            system: Optional system prompt
-            temperature: Sampling temperature
-            max_tokens: Maximum tokens in response
+            schema: Optional Pydantic model for structured output
+            tools: Optional list of ToolDefinition objects for tool calling
             tool_choice: Tool selection mode ("auto", "required", "none", or specific tool)
+            stream: If True, return a generator yielding ProviderStreamChunk
 
         Returns:
-            ProviderResponse with .tool_calls if the model wants to call tools
+            ProviderResponse for non-streaming, or Generator[ProviderStreamChunk] for streaming
         """
         pass

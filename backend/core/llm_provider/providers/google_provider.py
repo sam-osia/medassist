@@ -2,12 +2,12 @@
 
 import json
 import os
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, Generator, List, Optional, Type, Union
 
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
-from .base import BaseProvider, ProviderResponse, ToolDefinition
+from .base import BaseProvider, ProviderResponse, ProviderStreamChunk, ToolDefinition
 from ..result import ToolCall
 
 load_dotenv()
@@ -60,7 +60,6 @@ class GoogleProvider(BaseProvider):
         """Convert ToolDefinition to Gemini format."""
         function_declarations = []
         for tool in tools:
-            # Gemini expects a specific format for parameters
             fd = FunctionDeclaration(
                 name=tool.name,
                 description=tool.description,
@@ -97,10 +96,38 @@ class GoogleProvider(BaseProvider):
         system: Optional[str] = None,
         temperature: float = 1.0,
         max_tokens: int = 8192,
-    ) -> ProviderResponse:
-        """Make a standard completion call."""
+        schema: Optional[Type[BaseModel]] = None,
+        tools: Optional[List[ToolDefinition]] = None,
+        tool_choice: Union[str, Dict[str, Any]] = "auto",
+        stream: bool = False,
+    ) -> Union[ProviderResponse, Generator[ProviderStreamChunk, None, None]]:
+        """Unified call method with optional structured output, tools, and streaming."""
         self._ensure_configured()
 
+        if stream:
+            return self._call_stream(
+                model_id, messages, system, temperature, max_tokens, schema, tools, tool_choice
+            )
+
+        # Non-streaming calls
+        if schema and not tools:
+            return self._call_structured(model_id, messages, schema, system, temperature, max_tokens)
+        elif tools:
+            return self._call_with_tools(
+                model_id, messages, tools, tool_choice, system, temperature, max_tokens
+            )
+        else:
+            return self._call_basic(model_id, messages, system, temperature, max_tokens)
+
+    def _call_basic(
+        self,
+        model_id: str,
+        messages: List[Dict[str, str]],
+        system: Optional[str],
+        temperature: float,
+        max_tokens: int,
+    ) -> ProviderResponse:
+        """Make a standard completion call."""
         model = genai.GenerativeModel(
             model_name=model_id,
             system_instruction=system,
@@ -125,18 +152,16 @@ class GoogleProvider(BaseProvider):
             raw_response=response,
         )
 
-    def call_structured(
+    def _call_structured(
         self,
         model_id: str,
         messages: List[Dict[str, str]],
         schema: Type[BaseModel],
-        system: Optional[str] = None,
-        temperature: float = 1.0,
-        max_tokens: int = 8192,
+        system: Optional[str],
+        temperature: float,
+        max_tokens: int,
     ) -> ProviderResponse:
         """Make a structured output call using Gemini's JSON mode."""
-        self._ensure_configured()
-
         model = genai.GenerativeModel(
             model_name=model_id,
             system_instruction=system,
@@ -167,19 +192,17 @@ class GoogleProvider(BaseProvider):
             raw_response=response,
         )
 
-    def call_with_tools(
+    def _call_with_tools(
         self,
         model_id: str,
         messages: List[Dict[str, str]],
         tools: List[ToolDefinition],
-        system: Optional[str] = None,
-        temperature: float = 1.0,
-        max_tokens: int = 8192,
-        tool_choice: Union[str, Dict[str, Any]] = "auto",
+        tool_choice: Union[str, Dict[str, Any]],
+        system: Optional[str],
+        temperature: float,
+        max_tokens: int,
     ) -> ProviderResponse:
         """Make a call with tool/function calling support."""
-        self._ensure_configured()
-
         gemini_tools = self._convert_tools(tools)
         tool_config = self._convert_tool_choice(tool_choice)
 
@@ -211,7 +234,6 @@ class GoogleProvider(BaseProvider):
                 content = part.text
             elif hasattr(part, "function_call") and part.function_call:
                 fc = part.function_call
-                # Convert args to dict
                 args = dict(fc.args) if fc.args else {}
                 tool_calls.append(
                     ToolCall(
@@ -229,6 +251,91 @@ class GoogleProvider(BaseProvider):
             raw_response=response,
         )
 
+    def _call_stream(
+        self,
+        model_id: str,
+        messages: List[Dict[str, str]],
+        system: Optional[str],
+        temperature: float,
+        max_tokens: int,
+        schema: Optional[Type[BaseModel]],
+        tools: Optional[List[ToolDefinition]],
+        tool_choice: Union[str, Dict[str, Any]],
+    ) -> Generator[ProviderStreamChunk, None, None]:
+        """Stream a call, yielding chunks as they arrive."""
+        gemini_tools = None
+        tool_config = None
+
+        if tools:
+            gemini_tools = self._convert_tools(tools)
+            tool_config = self._convert_tool_choice(tool_choice)
+
+        model = genai.GenerativeModel(
+            model_name=model_id,
+            system_instruction=system,
+            tools=gemini_tools,
+        )
+
+        gemini_messages = self._convert_messages(messages)
+
+        generation_config = {
+            "temperature": temperature,
+            "max_output_tokens": max_tokens,
+        }
+
+        # For structured output with streaming
+        if schema and not tools:
+            generation_config["response_mime_type"] = "application/json"
+            generation_config["response_schema"] = schema
+
+        response = model.generate_content(
+            gemini_messages,
+            generation_config=generation_config,
+            tool_config=tool_config,
+            stream=True,
+        )
+
+        accumulated_content = ""
+        final_tool_calls = []
+        final_input_tokens = 0
+        final_output_tokens = 0
+
+        for chunk in response:
+            # Extract text from chunk
+            if chunk.text:
+                accumulated_content += chunk.text
+                yield ProviderStreamChunk(content=chunk.text)
+
+            # Check for function calls in chunk
+            if hasattr(chunk, "candidates") and chunk.candidates:
+                for candidate in chunk.candidates:
+                    if hasattr(candidate, "content") and candidate.content:
+                        for part in candidate.content.parts:
+                            if hasattr(part, "function_call") and part.function_call:
+                                fc = part.function_call
+                                args = dict(fc.args) if fc.args else {}
+                                final_tool_calls.append(
+                                    ToolCall(
+                                        id=f"call_{fc.name}",
+                                        name=fc.name,
+                                        arguments=args,
+                                    )
+                                )
+
+            # Check for usage metadata
+            if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
+                final_input_tokens = chunk.usage_metadata.prompt_token_count
+                final_output_tokens = chunk.usage_metadata.candidates_token_count
+
+        # Yield final chunk with metadata
+        yield ProviderStreamChunk(
+            content="",
+            is_final=True,
+            tool_calls=final_tool_calls if final_tool_calls else None,
+            input_tokens=final_input_tokens,
+            output_tokens=final_output_tokens,
+        )
+
 
 def main():
     """Run Google Gemini provider tests."""
@@ -237,7 +344,7 @@ def main():
     print("=" * 60)
 
     provider = GoogleProvider()
-    model_id = "models/gemini-2.0-flash"  # Use cheaper model for tests
+    model_id = "models/gemini-2.0-flash"
 
     # Test 1: Simple call
     print("\n--- Test 1: Simple Call ---")
@@ -260,7 +367,7 @@ def main():
             name: str
             age: int
 
-        response = provider.call_structured(
+        response = provider.call(
             model_id=model_id,
             messages=[
                 {
@@ -300,7 +407,7 @@ def main():
             )
         ]
 
-        response = provider.call_with_tools(
+        response = provider.call(
             model_id=model_id,
             messages=[{"role": "user", "content": "What time is it in Tokyo?"}],
             tools=tools,
@@ -312,6 +419,60 @@ def main():
             for tc in response.tool_calls:
                 print(f"  - {tc.name}({tc.arguments})")
         print(f"Tokens: {response.input_tokens} in, {response.output_tokens} out")
+        print("PASS")
+    except Exception as e:
+        print(f"FAIL: {e}")
+
+    # Test 4: Streaming basic
+    print("\n--- Test 4: Streaming Basic ---")
+    try:
+        stream = provider.call(
+            model_id=model_id,
+            messages=[{"role": "user", "content": "Count from 1 to 5, one number per line."}],
+            temperature=0,
+            stream=True,
+        )
+        print("Streamed content: ", end="")
+        for chunk in stream:
+            if chunk.content:
+                print(chunk.content, end="", flush=True)
+            if chunk.is_final:
+                print(f"\nFinal - Tokens: {chunk.input_tokens} in, {chunk.output_tokens} out")
+        print("PASS")
+    except Exception as e:
+        print(f"FAIL: {e}")
+
+    # Test 5: Streaming with tools
+    print("\n--- Test 5: Streaming with Tools ---")
+    try:
+        tools = [
+            ToolDefinition(
+                name="get_weather",
+                description="Get weather for a location",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string", "description": "City name"}
+                    },
+                    "required": ["location"],
+                },
+            )
+        ]
+
+        stream = provider.call(
+            model_id=model_id,
+            messages=[{"role": "user", "content": "What's the weather in Paris?"}],
+            tools=tools,
+            temperature=0,
+            stream=True,
+        )
+        print("Streamed: ", end="")
+        for chunk in stream:
+            if chunk.content:
+                print(chunk.content, end="", flush=True)
+            if chunk.is_final:
+                print(f"\nTool calls: {chunk.tool_calls}")
+                print(f"Tokens: {chunk.input_tokens} in, {chunk.output_tokens} out")
         print("PASS")
     except Exception as e:
         print(f"FAIL: {e}")
