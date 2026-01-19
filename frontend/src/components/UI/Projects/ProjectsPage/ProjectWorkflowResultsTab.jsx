@@ -455,6 +455,7 @@ const ProjectWorkflowResultsTab = ({ project }) => {
                     experimentResults={selectedExperimentDetails.results}
                     datasetName={selectedExperimentDetails.metadata.dataset_name}
                     experimentName={selectedExperimentDetails.experiment_name}
+                    projectName={project.project_name}
                   />
                 </>
               )}

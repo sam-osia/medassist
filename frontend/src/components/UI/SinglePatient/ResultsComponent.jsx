@@ -418,10 +418,10 @@ const FlagRow = ({ flagName, flagData, onViewEvidence }) => {
   );
 };
 
-const ResultsComponent = ({ workflowResults, mrn, csn, patientExperiments = [] }) => {
+const ResultsComponent = ({ workflowResults, mrn, csn, patientExperiments = [], initialExperiment }) => {
   const [selectedEvidence, setSelectedEvidence] = useState(null);
   const [evidenceViewerOpen, setEvidenceViewerOpen] = useState(false);
-  const [selectedExperiment, setSelectedExperiment] = useState('current');
+  const [selectedExperiment, setSelectedExperiment] = useState(initialExperiment || 'current');
   const [experimentResults, setExperimentResults] = useState(null);
   const [displayedResults, setDisplayedResults] = useState(null);
 

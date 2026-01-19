@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Container,
   Typography,
@@ -45,6 +45,8 @@ const SinglePatientPage = () => {
   const theme = useTheme();
   const { datasetName, mrn, projectName } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { preselectedCSN, preselectedExperiment } = location.state || {};
   const [patientData, setPatientData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -85,11 +87,12 @@ const SinglePatientPage = () => {
   }, [patientData]);
 
   useEffect(() => {
-    // Set the first encounter as selected when patient data loads
+    // Set encounter when patient data loads - prefer preselected CSN from navigation state
     if (patientData?.encounters?.length > 0 && !selectedCSN) {
-      setSelectedCSN(patientData.encounters[0].csn.toString());
+      const initialCSN = preselectedCSN || patientData.encounters[0].csn.toString();
+      setSelectedCSN(initialCSN);
     }
-  }, [patientData, selectedCSN]);
+  }, [patientData, selectedCSN, preselectedCSN]);
 
   useEffect(() => {
     // Fetch patient experiments when CSN changes (only if viewing through project context)
@@ -97,6 +100,14 @@ const SinglePatientPage = () => {
       fetchPatientExperiments();
     }
   }, [selectedCSN, patientData?.mrn, projectName]);
+
+  useEffect(() => {
+    // Exit annotation mode when patient changes
+    if (annotationMode) {
+      exitAnnotationMode();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mrn]);
 
   useEffect(() => {
     // Listen for workflow completion events
@@ -765,6 +776,7 @@ const SinglePatientPage = () => {
                     mrn={patientData?.mrn}
                     csn={selectedCSN}
                     patientExperiments={patientExperiments}
+                    initialExperiment={preselectedExperiment}
                   />
                 )}
 
