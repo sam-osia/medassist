@@ -1,6 +1,5 @@
-"""Google Gemini API provider implementation."""
+"""Google Gemini API provider implementation using google.genai SDK."""
 
-import json
 import os
 from typing import Any, Dict, Generator, List, Optional, Type, Union
 
@@ -12,82 +11,170 @@ from ..result import ToolCall
 
 load_dotenv()
 
-# Import google.generativeai - will be configured on first use
+# Import google.genai - will be configured on first use
 try:
-    import google.generativeai as genai
-    from google.generativeai.types import FunctionDeclaration, Tool
+    from google import genai
+    from google.genai import types
     GENAI_AVAILABLE = True
 except ImportError:
     GENAI_AVAILABLE = False
     genai = None
+    types = None
 
 
 class GoogleProvider(BaseProvider):
-    """Google Gemini API provider."""
+    """Google Gemini API provider using the new google.genai SDK."""
 
     def __init__(self):
-        self._configured = False
+        self._client = None
 
-    def _ensure_configured(self):
-        """Configure the Gemini API on first use."""
+    @property
+    def client(self):
+        """Lazy client initialization."""
         if not GENAI_AVAILABLE:
             raise ImportError(
-                "google-generativeai package not installed. "
-                "Install with: pip install google-generativeai"
+                "google-genai package not installed. "
+                "Install with: pip install google-genai"
             )
-
-        if not self._configured:
-            api_key = os.getenv("GOOGLE_API_KEY")
+        if self._client is None:
+            api_key = os.getenv("GEMINI_API_KEY")
             if not api_key:
-                raise ValueError("GOOGLE_API_KEY environment variable not set")
-            genai.configure(api_key=api_key)
-            self._configured = True
+                raise ValueError("GEMINI_API_KEY environment variable not set")
+            self._client = genai.Client(api_key=api_key)
+        return self._client
 
     def _convert_messages(
         self, messages: List[Dict[str, str]]
-    ) -> List[Dict[str, Any]]:
-        """Convert OpenAI-style messages to Gemini format."""
-        gemini_messages = []
+    ) -> List[Any]:
+        """Convert OpenAI-style messages to Gemini Content format."""
+        contents = []
         for msg in messages:
             role = "model" if msg["role"] == "assistant" else "user"
-            gemini_messages.append({
-                "role": role,
-                "parts": [msg["content"]],
-            })
-        return gemini_messages
+            contents.append(
+                types.Content(
+                    role=role,
+                    parts=[types.Part(text=msg["content"])]
+                )
+            )
+        return contents
 
     def _convert_tools(self, tools: List[ToolDefinition]) -> List[Any]:
-        """Convert ToolDefinition to Gemini format."""
+        """Convert ToolDefinition to Gemini Tool format."""
         function_declarations = []
         for tool in tools:
-            fd = FunctionDeclaration(
+            fd = types.FunctionDeclaration(
                 name=tool.name,
                 description=tool.description,
                 parameters=tool.parameters,
             )
             function_declarations.append(fd)
-        return [Tool(function_declarations=function_declarations)]
+        return [types.Tool(function_declarations=function_declarations)]
 
     def _convert_tool_choice(
         self, tool_choice: Union[str, Dict[str, Any]]
-    ) -> Optional[Dict[str, Any]]:
-        """Convert tool_choice to Gemini format."""
+    ) -> Optional[Any]:
+        """Convert tool_choice to Gemini ToolConfig."""
         if isinstance(tool_choice, str):
             if tool_choice == "auto":
-                return {"function_calling_config": {"mode": "AUTO"}}
+                mode = "AUTO"
             elif tool_choice == "required":
-                return {"function_calling_config": {"mode": "ANY"}}
+                mode = "ANY"
             elif tool_choice == "none":
-                return {"function_calling_config": {"mode": "NONE"}}
+                mode = "NONE"
             else:
                 # Specific function name
-                return {
-                    "function_calling_config": {
-                        "mode": "ANY",
-                        "allowed_function_names": [tool_choice],
-                    }
-                }
-        return tool_choice
+                return types.ToolConfig(
+                    function_calling_config=types.FunctionCallingConfig(
+                        mode="ANY",
+                        allowed_function_names=[tool_choice],
+                    )
+                )
+            return types.ToolConfig(
+                function_calling_config=types.FunctionCallingConfig(mode=mode)
+            )
+        return None
+
+    def _build_config(
+        self,
+        system: Optional[str],
+        temperature: float,
+        max_tokens: int,
+        schema: Optional[Type[BaseModel]] = None,
+        tools: Optional[List[Any]] = None,
+        tool_config: Optional[Any] = None,
+    ) -> Any:
+        """Build unified GenerateContentConfig."""
+        config_kwargs = {
+            "temperature": temperature,
+            "max_output_tokens": max_tokens,
+        }
+
+        if system:
+            config_kwargs["system_instruction"] = system
+
+        if schema and not tools:
+            # Structured output mode
+            config_kwargs["response_mime_type"] = "application/json"
+            config_kwargs["response_schema"] = schema
+
+        if tools:
+            config_kwargs["tools"] = tools
+            if tool_config:
+                config_kwargs["tool_config"] = tool_config
+
+        return types.GenerateContentConfig(**config_kwargs)
+
+    def _extract_response(
+        self,
+        response: Any,
+        schema: Optional[Type[BaseModel]] = None,
+    ) -> ProviderResponse:
+        """Extract content and tool calls from Gemini response."""
+        content = ""
+        tool_calls = []
+        parsed = None
+
+        # Try to get text directly first
+        if hasattr(response, 'text') and response.text:
+            content = response.text
+
+        # Extract from candidates for tool calls
+        if hasattr(response, 'candidates') and response.candidates:
+            candidate = response.candidates[0]
+            if hasattr(candidate, 'content') and candidate.content:
+                for part in candidate.content.parts:
+                    if hasattr(part, 'text') and part.text and not content:
+                        content = part.text
+                    elif hasattr(part, 'function_call') and part.function_call:
+                        fc = part.function_call
+                        args = dict(fc.args) if fc.args else {}
+                        tool_calls.append(
+                            ToolCall(
+                                id=f"call_{fc.name}",
+                                name=fc.name,
+                                arguments=args,
+                            )
+                        )
+
+        # For structured output, parse the JSON content
+        if schema and content and not tool_calls:
+            parsed = schema.model_validate_json(content)
+
+        # Get token counts
+        input_tokens = 0
+        output_tokens = 0
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            input_tokens = response.usage_metadata.prompt_token_count or 0
+            output_tokens = response.usage_metadata.candidates_token_count or 0
+
+        return ProviderResponse(
+            content=content,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            parsed=parsed,
+            tool_calls=tool_calls if tool_calls else None,
+            raw_response=response,
+        )
 
     def call(
         self,
@@ -102,216 +189,67 @@ class GoogleProvider(BaseProvider):
         stream: bool = False,
     ) -> Union[ProviderResponse, Generator[ProviderStreamChunk, None, None]]:
         """Unified call method with optional structured output, tools, and streaming."""
-        self._ensure_configured()
+        # Convert inputs
+        contents = self._convert_messages(messages)
+        gemini_tools = self._convert_tools(tools) if tools else None
+        tool_config = self._convert_tool_choice(tool_choice) if tools else None
 
-        if stream:
-            return self._call_stream(
-                model_id, messages, system, temperature, max_tokens, schema, tools, tool_choice
-            )
-
-        # Non-streaming calls
-        if schema and not tools:
-            return self._call_structured(model_id, messages, schema, system, temperature, max_tokens)
-        elif tools:
-            return self._call_with_tools(
-                model_id, messages, tools, tool_choice, system, temperature, max_tokens
-            )
-        else:
-            return self._call_basic(model_id, messages, system, temperature, max_tokens)
-
-    def _call_basic(
-        self,
-        model_id: str,
-        messages: List[Dict[str, str]],
-        system: Optional[str],
-        temperature: float,
-        max_tokens: int,
-    ) -> ProviderResponse:
-        """Make a standard completion call."""
-        model = genai.GenerativeModel(
-            model_name=model_id,
-            system_instruction=system,
-        )
-
-        gemini_messages = self._convert_messages(messages)
-
-        generation_config = {
-            "temperature": temperature,
-            "max_output_tokens": max_tokens,
-        }
-
-        response = model.generate_content(
-            gemini_messages,
-            generation_config=generation_config,
-        )
-
-        return ProviderResponse(
-            content=response.text,
-            input_tokens=response.usage_metadata.prompt_token_count,
-            output_tokens=response.usage_metadata.candidates_token_count,
-            raw_response=response,
-        )
-
-    def _call_structured(
-        self,
-        model_id: str,
-        messages: List[Dict[str, str]],
-        schema: Type[BaseModel],
-        system: Optional[str],
-        temperature: float,
-        max_tokens: int,
-    ) -> ProviderResponse:
-        """Make a structured output call using Gemini's JSON mode."""
-        model = genai.GenerativeModel(
-            model_name=model_id,
-            system_instruction=system,
-        )
-
-        gemini_messages = self._convert_messages(messages)
-
-        generation_config = {
-            "temperature": temperature,
-            "max_output_tokens": max_tokens,
-            "response_mime_type": "application/json",
-            "response_schema": schema,
-        }
-
-        response = model.generate_content(
-            gemini_messages,
-            generation_config=generation_config,
-        )
-
-        content = response.text
-        parsed = schema.model_validate_json(content)
-
-        return ProviderResponse(
-            content=content,
-            parsed=parsed,
-            input_tokens=response.usage_metadata.prompt_token_count,
-            output_tokens=response.usage_metadata.candidates_token_count,
-            raw_response=response,
-        )
-
-    def _call_with_tools(
-        self,
-        model_id: str,
-        messages: List[Dict[str, str]],
-        tools: List[ToolDefinition],
-        tool_choice: Union[str, Dict[str, Any]],
-        system: Optional[str],
-        temperature: float,
-        max_tokens: int,
-    ) -> ProviderResponse:
-        """Make a call with tool/function calling support."""
-        gemini_tools = self._convert_tools(tools)
-        tool_config = self._convert_tool_choice(tool_choice)
-
-        model = genai.GenerativeModel(
-            model_name=model_id,
-            system_instruction=system,
+        # Build config
+        config = self._build_config(
+            system=system,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            schema=schema,
             tools=gemini_tools,
-        )
-
-        gemini_messages = self._convert_messages(messages)
-
-        generation_config = {
-            "temperature": temperature,
-            "max_output_tokens": max_tokens,
-        }
-
-        response = model.generate_content(
-            gemini_messages,
-            generation_config=generation_config,
             tool_config=tool_config,
         )
 
-        # Extract content and tool calls
-        content = ""
-        tool_calls = []
+        if stream:
+            return self._call_stream(model_id, contents, config, schema)
 
-        for part in response.candidates[0].content.parts:
-            if hasattr(part, "text") and part.text:
-                content = part.text
-            elif hasattr(part, "function_call") and part.function_call:
-                fc = part.function_call
-                args = dict(fc.args) if fc.args else {}
-                tool_calls.append(
-                    ToolCall(
-                        id=f"call_{fc.name}",  # Gemini doesn't provide IDs
-                        name=fc.name,
-                        arguments=args,
-                    )
-                )
-
-        return ProviderResponse(
-            content=content,
-            input_tokens=response.usage_metadata.prompt_token_count,
-            output_tokens=response.usage_metadata.candidates_token_count,
-            tool_calls=tool_calls if tool_calls else None,
-            raw_response=response,
+        # Non-streaming call
+        response = self.client.models.generate_content(
+            model=model_id,
+            contents=contents,
+            config=config,
         )
+
+        return self._extract_response(response, schema)
 
     def _call_stream(
         self,
         model_id: str,
-        messages: List[Dict[str, str]],
-        system: Optional[str],
-        temperature: float,
-        max_tokens: int,
+        contents: List[Any],
+        config: Any,
         schema: Optional[Type[BaseModel]],
-        tools: Optional[List[ToolDefinition]],
-        tool_choice: Union[str, Dict[str, Any]],
     ) -> Generator[ProviderStreamChunk, None, None]:
         """Stream a call, yielding chunks as they arrive."""
-        gemini_tools = None
-        tool_config = None
-
-        if tools:
-            gemini_tools = self._convert_tools(tools)
-            tool_config = self._convert_tool_choice(tool_choice)
-
-        model = genai.GenerativeModel(
-            model_name=model_id,
-            system_instruction=system,
-            tools=gemini_tools,
-        )
-
-        gemini_messages = self._convert_messages(messages)
-
-        generation_config = {
-            "temperature": temperature,
-            "max_output_tokens": max_tokens,
-        }
-
-        # For structured output with streaming
-        if schema and not tools:
-            generation_config["response_mime_type"] = "application/json"
-            generation_config["response_schema"] = schema
-
-        response = model.generate_content(
-            gemini_messages,
-            generation_config=generation_config,
-            tool_config=tool_config,
-            stream=True,
+        response_stream = self.client.models.generate_content_stream(
+            model=model_id,
+            contents=contents,
+            config=config,
         )
 
         accumulated_content = ""
         final_tool_calls = []
         final_input_tokens = 0
         final_output_tokens = 0
+        last_chunk = None
 
-        for chunk in response:
+        for chunk in response_stream:
+            last_chunk = chunk
+
             # Extract text from chunk
-            if chunk.text:
+            if hasattr(chunk, 'text') and chunk.text:
                 accumulated_content += chunk.text
                 yield ProviderStreamChunk(content=chunk.text)
 
             # Check for function calls in chunk
-            if hasattr(chunk, "candidates") and chunk.candidates:
+            if hasattr(chunk, 'candidates') and chunk.candidates:
                 for candidate in chunk.candidates:
-                    if hasattr(candidate, "content") and candidate.content:
+                    if hasattr(candidate, 'content') and candidate.content:
                         for part in candidate.content.parts:
-                            if hasattr(part, "function_call") and part.function_call:
+                            if hasattr(part, 'function_call') and part.function_call:
                                 fc = part.function_call
                                 args = dict(fc.args) if fc.args else {}
                                 final_tool_calls.append(
@@ -323,9 +261,9 @@ class GoogleProvider(BaseProvider):
                                 )
 
             # Check for usage metadata
-            if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
-                final_input_tokens = chunk.usage_metadata.prompt_token_count
-                final_output_tokens = chunk.usage_metadata.candidates_token_count
+            if hasattr(chunk, 'usage_metadata') and chunk.usage_metadata:
+                final_input_tokens = chunk.usage_metadata.prompt_token_count or 0
+                final_output_tokens = chunk.usage_metadata.candidates_token_count or 0
 
         # Yield final chunk with metadata
         yield ProviderStreamChunk(
@@ -340,11 +278,11 @@ class GoogleProvider(BaseProvider):
 def main():
     """Run Google Gemini provider tests."""
     print("=" * 60)
-    print("Google Gemini Provider Tests")
+    print("Google Gemini Provider Tests (google.genai SDK)")
     print("=" * 60)
 
     provider = GoogleProvider()
-    model_id = "models/gemini-2.0-flash"
+    model_id = "gemini-2.0-flash"
 
     # Test 1: Simple call
     print("\n--- Test 1: Simple Call ---")
