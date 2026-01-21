@@ -29,11 +29,11 @@ class SummarizePatientNoteInput(BaseModel):
 class HighlightPatientNoteInput(BaseModel):
     note: str
     criteria: str
-    prompt: PromptInput
+    prompt: Optional[PromptInput] = None
 
 class AnalyzeNoteWithSpanAndReasonInput(BaseModel):
-    note:str
-    prompt: PromptInput
+    note: str
+    prompt: Optional[PromptInput] = None
 
 # Keyword Count Tool Models
 class KeywordCountInput(BaseModel):
