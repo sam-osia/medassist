@@ -2,8 +2,8 @@ from fastapi import APIRouter, HTTPException, Depends, Body
 from typing import Dict, Any
 import logging
 
-from core.llm_lib.supervisor_worker_network.tools.registry import discover, get_catalog
-from core.llm_lib.supervisor_worker_network.tools.runner import run_tool as run_tool_service
+from core.workflow.tools.registry import discover, get_catalog
+from core.workflow.tools.runner import run_tool as run_tool_service
 
 from .dependencies import get_current_user
 

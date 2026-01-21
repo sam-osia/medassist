@@ -12,6 +12,9 @@ from .providers.anthropic_provider import AnthropicProvider
 from .providers.google_provider import GoogleProvider
 
 
+# Default model when none specified
+DEFAULT_MODEL = "gpt-4o"
+
 # Singleton provider instances (lazy initialized)
 _providers: Dict[str, BaseProvider] = {}
 
@@ -31,8 +34,8 @@ def _get_provider(name: str) -> BaseProvider:
 
 
 def call(
-    model: str,
     messages: List[Dict[str, str]],
+    model: str = DEFAULT_MODEL,
     system: Optional[str] = None,
     temperature: float = 1.0,
     max_tokens: int = 8192,
@@ -44,8 +47,8 @@ def call(
     """Unified LLM call with optional structured output, tools, and streaming.
 
     Args:
-        model: Friendly model name (e.g., "gpt-4o", "claude-sonnet", "gemini-2.0-flash")
         messages: List of messages in OpenAI format [{"role": "user", "content": "..."}]
+        model: Friendly model name (default: "gpt-4o"). Options: "gpt-4o", "claude-sonnet", "gemini-2.0-flash", etc.
         system: Optional system prompt
         temperature: Sampling temperature (0.0 - 2.0)
         max_tokens: Maximum tokens in response (default: 8192)

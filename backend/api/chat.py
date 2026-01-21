@@ -3,8 +3,8 @@ from fastapi.responses import StreamingResponse
 from typing import Dict, Any
 import logging
 
-from core.llm_lib.inference import get_models, call_llm
-from core.llm_lib.supervisor_worker_network.agents.supervisor import supervisor_stream
+from core.llm_provider import call, get_models
+from core.deprecated.agents.supervisor import supervisor_stream
 from core.process.process_v1_events import process_workflow_stream
 from .dependencies import get_current_user
 
@@ -33,15 +33,15 @@ def chat(data: Dict[str, Any] = Body(...)):
     messages = data["messages"]
 
     try:
-        result = call_llm(
-            prompt=messages,
-            system_prompt=system_message,
+        result = call(
+            messages=messages,
+            system=system_message,
             model=model
         )
         print(result)
         print()
-        print(result.answer)
-        return {"response": result.answer}
+        print(result.content)
+        return {"response": result.content}
     except Exception as e:
         logger.error(f"Error in chat: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

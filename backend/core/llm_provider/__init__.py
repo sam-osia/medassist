@@ -31,7 +31,7 @@ Example Usage:
     ...         print(tc.name, tc.arguments)
 """
 
-from .client import call, call_structured, call_with_tools
+from .client import call, call_structured, call_with_tools, DEFAULT_MODEL
 from .result import LLMResult, ToolCall, ToolResult, StreamChunk
 from .registry import (
     MODELS,
@@ -49,6 +49,7 @@ __all__ = [
     "call",
     "call_structured",
     "call_with_tools",
+    "DEFAULT_MODEL",
     # Result types
     "LLMResult",
     "ToolCall",

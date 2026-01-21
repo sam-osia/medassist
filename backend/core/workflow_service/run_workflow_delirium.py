@@ -1,20 +1,20 @@
 import json
 import logging
 
-from core.llm_lib.supervisor_worker_network.tools.notes import (
+from core.workflow.tools.notes import (
     GetPatientNotesIds, ReadPatientNote, IdentifyFlag
 )
-from core.llm_lib.supervisor_worker_network.tools.medications import (
+from core.workflow.tools.medications import (
     GetMedicationsIds, ReadMedication
 )
-from core.llm_lib.supervisor_worker_network.tools.flowsheets import (
+from core.workflow.tools.flowsheets import (
     AnalyzeFlowsheetInstance
 )
-from core.llm_lib.supervisor_worker_network.tools.diagnosis import (
+from core.workflow.tools.diagnosis import (
     GetDiagnosisIds, ReadDiagnosis
 )
 from core.data.dataloader import get_patient_details
-from core.llm_lib.supervisor_worker_network.schemas.tool_inputs import (
+from core.workflow.schemas.tool_inputs import (
     GetPatientNotesIdsInput, ReadPatientNoteInput, IdentifyFlagInput,
     GetMedicationsIdsInput, ReadMedicationInput, GetDiagnosisIdsInput, ReadDiagnosisInput,
     AnalyzeFlowsheetInstanceInput

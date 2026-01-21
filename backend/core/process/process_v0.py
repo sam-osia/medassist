@@ -3,12 +3,12 @@ from dotenv import load_dotenv
 import os
 import json
 
-from core.llm_lib.supervisor_worker_network.tools.notes import (
-    GetPatientNotesIds, ReadPatientNote, 
+from core.workflow.tools.notes import (
+    GetPatientNotesIds, ReadPatientNote,
     SummarizePatientNote, HighlightPatientNote, KeywordCount)
-from core.llm_lib.supervisor_worker_network.tools.flowsheets import (
+from core.workflow.tools.flowsheets import (
     ReadFlowsheetsTable, SummarizeFlowsheetsTable)
-from core.llm_lib.supervisor_worker_network.schemas.tool_inputs import (
+from core.workflow.schemas.tool_inputs import (
     GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput,
     HighlightPatientNoteInput, KeywordCountInput)
 

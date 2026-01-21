@@ -19,7 +19,7 @@ from core.dataloders.experiment_loader import (
 )
 from core.workflow_service.run_workflow_delirium import run_workflow as run_workflow_delirium
 from core.workflow_service.run_workflow_sdoh import run_workflow as run_workflow_sdoh
-from core.llm_lib.supervisor_worker_network.schemas.tool_inputs import PromptInput
+from core.workflow.schemas.tool_inputs import PromptInput
 from .dependencies import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])

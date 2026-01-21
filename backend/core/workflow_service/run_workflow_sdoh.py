@@ -2,10 +2,10 @@ import json
 import logging
 import re
 
-from core.llm_lib.supervisor_worker_network.tools.notes import (
+from core.workflow.tools.notes import (
     GetPatientNotesIds, ReadPatientNote, AnalyzeNoteWithSpanAndReason
 )
-from core.llm_lib.supervisor_worker_network.schemas.tool_inputs import (
+from core.workflow.schemas.tool_inputs import (
     GetPatientNotesIdsInput, ReadPatientNoteInput, AnalyzeNoteWithSpanAndReasonInput, PromptInput
 )
 

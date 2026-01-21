@@ -4,23 +4,23 @@ import os
 import json
 import datetime
 
-from core.llm_lib.supervisor_worker_network.tools.notes import (
-    GetPatientNotesIds, ReadPatientNote, 
+from core.workflow.tools.notes import (
+    GetPatientNotesIds, ReadPatientNote,
     SummarizePatientNote, HighlightPatientNote, KeywordCount, IdentifyFlag)
-from core.llm_lib.supervisor_worker_network.tools.medications import (
+from core.workflow.tools.medications import (
     GetMedicationsIds, ReadMedication)
-from core.llm_lib.supervisor_worker_network.tools.flowsheets import (
+from core.workflow.tools.flowsheets import (
     ReadFlowsheetsTable, SummarizeFlowsheetsTable, AnalyzeFlowsheetInstance)
-from core.llm_lib.supervisor_worker_network.tools.diagnosis import (
+from core.workflow.tools.diagnosis import (
     GetDiagnosisIds, ReadDiagnosis)
 from core.data.dataloader import get_patient_details
-from core.llm_lib.supervisor_worker_network.schemas.tool_inputs import (
+from core.workflow.schemas.tool_inputs import (
     GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput,
     HighlightPatientNoteInput, KeywordCountInput, IdentifyFlagInput,
     GetMedicationsIdsInput, ReadMedicationInput, GetDiagnosisIdsInput, ReadDiagnosisInput,
     ReadFlowsheetsTableInput, AnalyzeFlowsheetInstanceInput)
-from core.llm_lib.supervisor_worker_network.utils.event_handler import (
-    publish_tool_call_with_data_item, publish_tool_result_with_data_item, 
+from core.workflow.utils.event_handler import (
+    publish_tool_call_with_data_item, publish_tool_result_with_data_item,
     publish_llm_thinking, publish_progress_update, publish_final_result, publish_error,
     publish_workflow_complete
 )

@@ -3,7 +3,7 @@ from typing import Dict, Any
 import logging
 import copy
 
-from core.llm_lib.supervisor_worker_network.planning_agent.plan_supervisor_agent import conversational_planning_agent
+from core.workflow.planning.plan_supervisor_agent import conversational_planning_agent
 from core.dataloders.plan_loader import save_plan, get_plan, list_plans, delete_plan, plan_exists
 from core.dataloders.conversation_loader import (
     save_conversation, get_conversation, list_conversations,
