@@ -3,12 +3,10 @@
 import sys
 sys.path.insert(0, '/home/saman/medassist/backend')
 
-from core.llm_lib.supervisor_worker_network.workflow_agent import (
-    WorkflowOrchestrator,
-    WorkflowAgentState,
-)
-from core.llm_lib.supervisor_worker_network.workflow_agent.schemas import (
-    OrchestratorDecision,
+from core.workflow.orchestrator import WorkflowOrchestrator
+from core.workflow.state import WorkflowAgentState
+from core.workflow.schemas.orchestrator_schemas import OrchestratorDecision
+from core.workflow.schemas.agent_schemas import (
     GeneratorInput,
     GeneratorOutput,
     EditorInput,
@@ -24,7 +22,7 @@ from core.llm_lib.supervisor_worker_network.workflow_agent.schemas import (
     ClarifierInput,
     ClarifierOutput,
 )
-from core.llm_lib.supervisor_worker_network.workflow_agent.agents import (
+from core.workflow.agents import (
     GeneratorAgent,
     EditorAgent,
     ChunkOperatorAgent,
@@ -33,10 +31,8 @@ from core.llm_lib.supervisor_worker_network.workflow_agent.agents import (
     SummarizerAgent,
     ClarifierAgent,
 )
-from core.llm_lib.supervisor_worker_network.workflow_agent.utils.tool_specs import (
-    get_tool_specs_for_agents,
-)
-from core.llm_lib.supervisor_worker_network.schemas.plan_schema import (
+from core.workflow.utils.tool_specs import get_tool_specs_for_agents
+from core.workflow.schemas.plan_schema import (
     Plan as Workflow,
     ToolStep,
     LoopStep,
@@ -103,7 +99,7 @@ def test_validator_catches_duplicate_id():
     validator = ValidatorAgent()
 
     # Create workflow with duplicate step IDs
-    from core.llm_lib.supervisor_worker_network.schemas.tool_inputs import (
+    from core.workflow.schemas.tool_inputs import (
         GetPatientNotesIdsInput,
         ReadPatientNoteInput,
     )
@@ -138,7 +134,7 @@ def test_valid_workflow_passes_validation():
     """Test that a valid workflow passes validation."""
     validator = ValidatorAgent()
 
-    from core.llm_lib.supervisor_worker_network.schemas.tool_inputs import (
+    from core.workflow.schemas.tool_inputs import (
         GetPatientNotesIdsInput,
         ReadPatientNoteInput,
     )
@@ -220,7 +216,7 @@ def test_summarizer_agent(run_llm: bool = False):
         print("⏭ Summarizer agent test skipped (set run_llm=True to run)")
         return
 
-    from core.llm_lib.supervisor_worker_network.schemas.tool_inputs import (
+    from core.workflow.schemas.tool_inputs import (
         GetPatientNotesIdsInput,
     )
 

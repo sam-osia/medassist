@@ -19,7 +19,6 @@ import {
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
-import { getPageGradient } from '../App';
 import { projectsService } from '../services/ApiService';
 import ProjectDescriptionTab from '../components/UI/Projects/ProjectsPage/ProjectDescriptionTab';
 import ProjectDatasetTab from '../components/UI/Projects/ProjectsPage/ProjectDatasetTab';
@@ -86,7 +85,7 @@ const IndividualProjectPage = () => {
     <Box
       sx={{
         minHeight: '100vh',
-        background: getPageGradient(theme),
+        background: theme.pageGradient,
         py: 4
       }}
     >

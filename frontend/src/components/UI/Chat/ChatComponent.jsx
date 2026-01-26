@@ -120,7 +120,9 @@ const ChatComponent = ({ mrn, csn, collapsed = false, onToggleCollapse }) => {
                   lastMessage.isStreaming = false;
                   
                   // Also dispatch workflow complete event for results display
-                  if (typeof eventData.content === 'object' && eventData.content.flags) {
+                  // Support both new flat results format and legacy flags format
+                  if (typeof eventData.content === 'object' &&
+                      (eventData.content.results || eventData.content.flags)) {
                     const workflowCompleteEvent = new CustomEvent('workflowComplete', {
                       detail: {
                         type: 'workflow_complete',

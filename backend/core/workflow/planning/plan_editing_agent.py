@@ -68,7 +68,7 @@ def build_edit_prompt(tools_specifications: dict,
 
 class EditPlan(Tool):
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"
+        self.dataset_name = dataset or "sickkids_icu"
     
     @property
     def name(self) -> str:

@@ -24,7 +24,6 @@ import {
 } from '@mui/material';
 import { ExpandMore, ExpandLess, ChevronRight, Send, CheckCircle } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
-import { getPageGradient } from '../App';
 import { caboodleService } from '../services/ApiService';
 
 const QueryInput = ({ onSubmit }) => {
@@ -267,9 +266,10 @@ const CaboodlePage = () => {
   return (
     <Box
       sx={{
-        minHeight: '100vh',
-        background: getPageGradient(theme),
-        py: 4
+        height: 'calc(100vh - 65px)',
+        background: theme.pageGradient,
+        py: 4,
+        overflow: 'hidden'
       }}
     >
       <Container maxWidth="xl">

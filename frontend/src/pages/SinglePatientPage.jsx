@@ -39,7 +39,6 @@ import ChatComponent from '../components/UI/Chat/ChatComponent';
 import BreadcrumbNav from '../components/UI/Common/BreadcrumbNav';
 import { ProcessingProvider } from '../contexts/ProcessingContext';
 import { useTheme } from '@mui/material/styles';
-import { getPageGradient } from '../App';
 
 const SinglePatientPage = () => {
   const theme = useTheme();
@@ -209,31 +208,6 @@ const SinglePatientPage = () => {
     }
   };
 
-  // Helper function to extract highlighted item IDs from workflow results
-  const getHighlightedItems = (dataType) => {
-    if (!workflowResults || !workflowResults.flags) return [];
-    
-    const highlightedIds = [];
-    Object.values(workflowResults.flags).forEach(flagData => {
-      if (flagData.sources) {
-        flagData.sources.forEach(source => {
-          if (source.type === dataType && source.details) {
-            if (dataType === 'diagnosis') {
-              highlightedIds.push(source.details.diagnosis_id);
-            } else if (dataType === 'medications') {
-              highlightedIds.push(source.details.order_id);
-            } else if (dataType === 'note') {
-              highlightedIds.push(source.details.note_id);
-            } else if (dataType === 'flowsheet') {
-              // For flowsheets, we'll add a string identifier for CAPD measurements
-              highlightedIds.push('capd_measurements');
-            }
-          }
-        });
-      }
-    });
-    return [...new Set(highlightedIds)]; // Remove duplicates
-  };
 
   const handleGoBack = () => {
     if (projectName) {
@@ -394,7 +368,7 @@ const SinglePatientPage = () => {
           display: 'flex', 
           height: 'calc(100vh - 80px)', // Subtract navbar height
           overflow: 'hidden',
-          background: getPageGradient(theme)
+          background: theme.pageGradient
         }}>
           {/* Main Content - Left Side */}
           <Box sx={{ 
@@ -421,7 +395,7 @@ const SinglePatientPage = () => {
             {/* Chat Panel */}
             <Box sx={{ 
               width: `${chatCollapsed ? 0 : chatWidth}px`,
-              borderLeft: '1px solid #e0e0e0',
+              borderLeft: (theme) => `1px solid ${theme.palette.divider}`,
               overflow: 'hidden',
               transition: 'width 0.3s ease'
             }}>
@@ -432,7 +406,7 @@ const SinglePatientPage = () => {
             <Box sx={{ 
               width: '60px',
               backgroundColor: 'surface.main',
-              borderLeft: '1px solid #e0e0e0',
+              borderLeft: (theme) => `1px solid ${theme.palette.divider}`,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -519,7 +493,7 @@ const SinglePatientPage = () => {
           display: 'flex', 
           height: 'calc(100vh - 80px)', // Subtract navbar height
           overflow: 'hidden',
-          background: getPageGradient(theme)
+          background: theme.pageGradient
         }}>
           {/* Main Content - Left Side */}
           <Box sx={{ 
@@ -550,7 +524,7 @@ const SinglePatientPage = () => {
             {/* Chat Panel */}
             <Box sx={{ 
               width: `${chatCollapsed ? 0 : chatWidth}px`,
-              borderLeft: '1px solid #e0e0e0',
+              borderLeft: (theme) => `1px solid ${theme.palette.divider}`,
               overflow: 'hidden',
               transition: 'width 0.3s ease'
             }}>
@@ -561,7 +535,7 @@ const SinglePatientPage = () => {
             <Box sx={{ 
               width: '60px',
               backgroundColor: 'surface.main',
-              borderLeft: '1px solid #e0e0e0',
+              borderLeft: (theme) => `1px solid ${theme.palette.divider}`,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -649,7 +623,7 @@ const SinglePatientPage = () => {
         overflow: 'hidden',
         position: 'relative',
         userSelect: isResizing ? 'none' : 'auto',
-        background: getPageGradient(theme)
+        background: theme.pageGradient
       }}>
         {/* Main Content - Left Side */}
         <Box sx={{ 
@@ -786,7 +760,6 @@ const SinglePatientPage = () => {
                     notes={selectedEncounter?.notes || []}
                     mrn={patientData?.mrn}
                     csn={selectedCSN}
-                    highlightedItems={getHighlightedItems('note')}
                     annotationMode={annotationMode && activeAnnotationGroup?.source === 'note'}
                     annotationMap={existingAnnotations}
                     onAnnotateClick={(note) => openAnnotationDialog(note, note.note_id)}
@@ -799,7 +772,6 @@ const SinglePatientPage = () => {
                     medications={selectedEncounter?.medications || []}
                     mrn={patientData?.mrn}
                     csn={selectedCSN}
-                    highlightedItems={getHighlightedItems('medications')}
                     annotationMode={annotationMode && activeAnnotationGroup?.source === 'medication'}
                     annotationMap={existingAnnotations}
                     onAnnotateClick={(med) => openAnnotationDialog(med, med.order_id)}
@@ -812,7 +784,6 @@ const SinglePatientPage = () => {
                     flowsheet_instances={reformatFlowsheetsForAnalysis(selectedEncounter?.flowsheets_pivot)}
                     mrn={patientData?.mrn}
                     csn={selectedCSN}
-                    highlightedItems={getHighlightedItems('flowsheet')}
                   />
                 )}
 
@@ -822,7 +793,6 @@ const SinglePatientPage = () => {
                     diagnoses={selectedEncounter?.diagnoses || []}
                     mrn={patientData?.mrn}
                     csn={selectedCSN}
-                    highlightedItems={getHighlightedItems('diagnosis')}
                     annotationMode={annotationMode && activeAnnotationGroup?.source === 'diagnosis'}
                     annotationMap={existingAnnotations}
                     onAnnotateClick={(diag) => openAnnotationDialog(diag, diag.diagnosis_id)}
@@ -873,7 +843,7 @@ const SinglePatientPage = () => {
           {/* Panel Content */}
           <Box sx={{ 
             width: `${chatCollapsed ? 0 : chatWidth}px`,
-            borderLeft: '1px solid #e0e0e0',
+            borderLeft: (theme) => `1px solid ${theme.palette.divider}`,
             overflow: 'hidden',
             transition: 'width 0.3s ease'
           }}>
@@ -898,7 +868,7 @@ const SinglePatientPage = () => {
           <Box sx={{ 
             width: '60px',
             backgroundColor: 'surface.main',
-            borderLeft: '1px solid #e0e0e0',
+            borderLeft: (theme) => `1px solid ${theme.palette.divider}`,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',

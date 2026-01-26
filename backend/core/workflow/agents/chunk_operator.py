@@ -1,9 +1,12 @@
 """Chunk operator agent - handles insert/append/remove operations on workflows."""
 
 import json
+import logging
 from pathlib import Path
 
 from core.llm_provider import call
+
+logger = logging.getLogger("workflow.agents")
 from core.workflow.schemas.plan_schema import Plan as Workflow
 
 from .base import BaseAgent
@@ -46,6 +49,8 @@ Output the modified workflow as valid JSON."""
 
     def run(self, inputs: ChunkOperatorInput) -> ChunkOperatorOutput:
         """Perform insert/append/remove operation on workflow."""
+        logger.info(f"[{self.name}] called - operation: {inputs.operation}")
+        logger.debug(f"[{self.name}] description: {inputs.description}")
         try:
             current_workflow_str = inputs.current_workflow.model_dump_json(indent=2)
             tool_specs_str = json.dumps(inputs.tool_specs, indent=2)
@@ -76,17 +81,20 @@ IMPORTANT: Preserve all unchanged steps exactly!"""
             )
 
             if result.parsed:
+                logger.info(f"[{self.name}] success - workflow now has {len(result.parsed.steps)} steps")
                 return ChunkOperatorOutput(
                     workflow=result.parsed,
                     success=True
                 )
             else:
+                logger.warning(f"[{self.name}] failed to parse modified workflow from LLM response")
                 return ChunkOperatorOutput(
                     success=False,
                     error_message="Failed to parse modified workflow from LLM response"
                 )
 
         except Exception as e:
+            logger.error(f"[{self.name}] error: {e}")
             return ChunkOperatorOutput(
                 success=False,
                 error_message=str(e)

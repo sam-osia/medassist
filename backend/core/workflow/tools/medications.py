@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class GetMedicationsIds(Tool):
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
     
     @property
@@ -70,7 +70,7 @@ class GetMedicationsIds(Tool):
 
 class ReadMedication(Tool):
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
     
     @property
@@ -130,7 +130,7 @@ class ReadMedication(Tool):
 
 class HighlightMedication(Tool):
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property
@@ -199,7 +199,7 @@ def is_safe_eval_expression(expression: str) -> bool:
 
 class FilterMedication(Tool):
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
         self.last_expression = None
 

@@ -1,14 +1,16 @@
 """Validator agent - validates workflow correctness (rule-based)."""
 
+import logging
 import re
 from typing import Set, Optional, Tuple
+
+logger = logging.getLogger("workflow.agents")
 
 from core.workflow.schemas.plan_schema import (
     Plan as Workflow,
     ToolStep,
     IfStep,
     LoopStep,
-    FlagVariableStep,
 )
 
 from .base import BaseAgent
@@ -31,6 +33,7 @@ class ValidatorAgent(BaseAgent):
 
     def run(self, inputs: ValidatorInput) -> ValidatorOutput:
         """Validate the workflow."""
+        logger.info(f"[{self.name}] called")
         workflow = inputs.workflow
 
         # Track defined variables
@@ -41,8 +44,10 @@ class ValidatorAgent(BaseAgent):
         result = self._validate_steps(workflow.steps, defined_vars, seen_step_ids)
 
         if result[0]:
+            logger.info(f"[{self.name}] valid=True")
             return ValidatorOutput(valid=True)
         else:
+            logger.info(f"[{self.name}] valid=False - step={result[1]}, reason={result[2]}")
             return ValidatorOutput(
                 valid=False,
                 broken_step_id=result[1],
@@ -110,11 +115,6 @@ class ValidatorAgent(BaseAgent):
                 # Add output_dict to defined vars if present
                 if step.output_dict:
                     defined_vars.add(step.output_dict)
-
-            elif isinstance(step, FlagVariableStep):
-                # Flag variable step defines a variable
-                if step.variable:
-                    defined_vars.add(step.variable)
 
         return (True, None, None)
 

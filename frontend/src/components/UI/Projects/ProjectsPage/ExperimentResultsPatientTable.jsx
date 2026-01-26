@@ -5,6 +5,7 @@ import {
   MaterialReactTable,
   useMaterialReactTable,
 } from 'material-react-table';
+import { countFlagsPerEncounter, getUniqueFlagNames } from '../../../../utils/workflowResultsUtils';
 
 const ExperimentResultsPatientTable = ({
   experimentResults,
@@ -13,25 +14,31 @@ const ExperimentResultsPatientTable = ({
   projectName
 }) => {
   const navigate = useNavigate();
-  const patients = experimentResults?.patients || [];
 
-  // Flatten data: each row = one CSN
+  // Process results using definition-based format
   const flattenedData = useMemo(() => {
-    return patients.flatMap(patient =>
-      (patient.encounters || []).map(encounter => ({
-        mrn: patient.mrn,
-        csn: encounter.csn,
-        flags: encounter.flags || {}
-      }))
-    );
-  }, [patients]);
+    if (!experimentResults?.output_definitions && !experimentResults?.output_values) {
+      return [];
+    }
 
-  // Extract flag names from first row (excluding *_threshold keys)
+    const countsData = countFlagsPerEncounter(experimentResults);
+    // Convert to format compatible with the table
+    return countsData.map((row) => ({
+      mrn: row.mrn,
+      csn: row.csn,
+      flags: Object.fromEntries(
+        Object.entries(row.flagCounts).map(([flagName, data]) => [
+          flagName,
+          { state: data.detected, sources: Array(data.count).fill({}) }
+        ])
+      )
+    }));
+  }, [experimentResults]);
+
+  // Extract flag names from definitions
   const flagNames = useMemo(() => {
-    if (flattenedData.length === 0) return [];
-    const flags = flattenedData[0].flags;
-    return Object.keys(flags).filter(key => !key.endsWith('_threshold'));
-  }, [flattenedData]);
+    return getUniqueFlagNames(experimentResults);
+  }, [experimentResults]);
 
   // Navigation handler
   const handleViewPatient = (row) => {

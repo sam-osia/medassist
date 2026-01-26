@@ -36,7 +36,7 @@ const NotePreview = ({ item }) => (
         p: 2,
         maxHeight: 300,
         overflow: 'auto',
-        backgroundColor: 'grey.50'
+        backgroundColor: 'custom.neutralBackground'
       }}
     >
       <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>

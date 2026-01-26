@@ -1,10 +1,13 @@
 """Main orchestrator with dynamic agent routing for workflow generation."""
 
 import json
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
 
 from core.llm_provider import call
+
+logger = logging.getLogger("workflow.orchestrator")
 from core.workflow.schemas.plan_schema import Plan as Workflow
 
 from .state import WorkflowAgentState
@@ -45,7 +48,7 @@ class WorkflowOrchestrator:
             "validator": ValidatorAgent(),
             "prompt_filler": PromptFillerAgent(dataset),
             "summarizer": SummarizerAgent(),
-            "clarifier": ClarifierAgent(),
+            # "clarifier": ClarifierAgent(),
         }
         self.tool_specs = get_tool_specs_for_agents(dataset)
         self._prompt = self._load_prompt()
@@ -105,6 +108,7 @@ Always provide agent_task with clear instructions for the agent you're calling."
                 "summary": str | None
             }
         """
+        logger.info(f"[orchestrator] processing: {user_message[:80]}...")
         state.add_user_message(user_message)
 
         max_iterations = 20  # Safety limit
@@ -130,6 +134,7 @@ Always provide agent_task with clear instructions for the agent you're calling."
             self._process_agent_result(decision.action, agent_result, state)
 
         # Max iterations reached
+        logger.warning(f"[orchestrator] max iterations ({max_iterations}) reached")
         return {
             "response_type": "text",
             "text": "I was unable to complete the workflow generation. Please try again.",
@@ -188,9 +193,14 @@ Decide what to do next. If the workflow is ready and summarized, respond to user
         )
 
         if result.parsed:
-            return result.parsed
+            decision = result.parsed
+            task_preview = f" (task: {decision.agent_task[:60]}...)" if decision.agent_task and len(decision.agent_task) > 60 else (f" (task: {decision.agent_task})" if decision.agent_task else "")
+            logger.info(f"[orchestrator] decision: {decision.action}{task_preview}")
+            logger.debug(f"[orchestrator] full decision: {decision.model_dump_json()}")
+            return decision
 
         # Fallback: respond to user
+        logger.warning("[orchestrator] failed to parse decision, falling back to respond_to_user")
         return OrchestratorDecision(
             action="respond_to_user",
             response_text="I encountered an issue deciding the next step. Please try again."
@@ -329,6 +339,7 @@ Decide what to do next. If the workflow is ready and summarized, respond to user
             # Add to conversation
             state.add_assistant_message(response_text, workflow_ref=workflow_id)
 
+            logger.info(f"[orchestrator] completed - response_type=workflow, workflow_id={workflow_id}")
             return {
                 "response_type": "workflow",
                 "text": response_text,
@@ -340,9 +351,61 @@ Decide what to do next. If the workflow is ready and summarized, respond to user
             # Text-only response
             state.add_assistant_message(response_text)
 
+            logger.info("[orchestrator] completed - response_type=text")
             return {
                 "response_type": "text",
                 "text": response_text,
                 "workflow": None,
                 "summary": None
             }
+
+    def process_message_with_trace(
+        self,
+        user_message: str,
+        state: WorkflowAgentState,
+        verbose: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Process message with tracing for debugging.
+        Returns response dict plus 'trace' list of agent calls.
+        """
+        trace = []
+
+        state.add_user_message(user_message)
+
+        max_iterations = 20
+        iteration = 0
+
+        while iteration < max_iterations:
+            iteration += 1
+
+            decision = self._get_orchestrator_decision(state, user_message)
+
+            # Record decision
+            trace.append({
+                "agent": decision.action,
+                "task": decision.agent_task,
+                "result": None
+            })
+
+            if decision.action == "respond_to_user":
+                response = self._build_response(decision, state)
+                response["trace"] = trace
+                return response
+
+            agent_result = self._call_agent(decision, state)
+
+            # Update trace with result
+            trace[-1]["result"] = agent_result
+
+            state.last_agent = decision.action.replace("call_", "")
+            state.last_agent_result = agent_result
+            self._process_agent_result(decision.action, agent_result, state)
+
+        return {
+            "response_type": "text",
+            "text": "Max iterations reached.",
+            "workflow": None,
+            "summary": None,
+            "trace": trace
+        }

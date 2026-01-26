@@ -47,7 +47,7 @@ const FlowsheetsComponent = ({ flowsheets_pivot, mrn, csn }) => {
     return (
       <Box>
         {/* Pivot Table Summary */}
-        <Box sx={{ mb: 2, p: 2, backgroundColor: 'grey.50', borderRadius: 1 }}>
+        <Box sx={{ mb: 2, p: 2, backgroundColor: 'custom.neutralBackground', borderRadius: 1 }}>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={3}>
               <Typography variant="body2">
@@ -91,9 +91,9 @@ const FlowsheetsComponent = ({ flowsheets_pivot, mrn, csn }) => {
             </TableHead>
             <TableBody>
               {measurements.map((measurement, rowIndex) => (
-                <TableRow key={rowIndex} sx={{ 
-                  '&:nth-of-type(odd)': { backgroundColor: 'grey.200' },
-                  '&:nth-of-type(even)': { backgroundColor: 'white' }
+                <TableRow key={rowIndex} sx={{
+                  '&:nth-of-type(odd)': { backgroundColor: 'custom.alternateRow' },
+                  '&:nth-of-type(even)': { backgroundColor: 'background.paper' }
                 }}>
                   <TableCell sx={{ position: 'sticky', left: 0, backgroundColor: 'inherit' }}>
                     <Typography variant="body2" sx={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -136,11 +136,11 @@ const FlowsheetsComponent = ({ flowsheets_pivot, mrn, csn }) => {
   return (
     <Accordion 
       defaultExpanded 
-      sx={{ border: '1px solid #e0e0e0' }}
+      sx={{ border: (theme) => `1px solid ${theme.palette.divider}` }}
     >
       <AccordionSummary
         expandIcon={<ExpandMoreIcon />}
-        sx={{ backgroundColor: 'grey.50' }}
+        sx={{ backgroundColor: 'action.hover' }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <FlowsheetIcon color="primary" sx={{ fontSize: 30 }} />

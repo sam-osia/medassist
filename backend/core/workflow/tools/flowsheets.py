@@ -12,7 +12,7 @@ from typing import Dict, Any
 
 class ReadFlowsheetsTable(Tool):
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
     
     @property
@@ -64,7 +64,7 @@ class ReadFlowsheetsTable(Tool):
 
 class SummarizeFlowsheetsTable(Tool):
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
     
     @property
@@ -123,7 +123,7 @@ class SummarizeFlowsheetsTable(Tool):
 
 class AnalyzeFlowsheetInstance(Tool):
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
     
     @property

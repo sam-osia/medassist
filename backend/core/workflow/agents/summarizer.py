@@ -1,6 +1,9 @@
 """Summarizer agent - generates human-readable workflow summaries."""
 
+import logging
 from pathlib import Path
+
+logger = logging.getLogger("workflow.agents")
 
 from pydantic import BaseModel
 
@@ -45,6 +48,7 @@ Guidelines:
 
     def run(self, inputs: SummarizerInput) -> SummarizerOutput:
         """Generate a summary of the workflow."""
+        logger.info(f"[{self.name}] called")
         try:
             workflow_str = inputs.workflow.model_dump_json(indent=2)
 
@@ -65,10 +69,13 @@ Generate a clear, concise summary of this workflow."""
             )
 
             if result.parsed:
+                logger.info(f"[{self.name}] success - summary length: {len(result.parsed.summary)}")
                 return SummarizerOutput(summary=result.parsed.summary)
             else:
                 # Fallback: use raw content
+                logger.warning(f"[{self.name}] using fallback content")
                 return SummarizerOutput(summary=result.content or "Workflow summary unavailable.")
 
         except Exception as e:
+            logger.error(f"[{self.name}] error: {e}")
             return SummarizerOutput(summary=f"Could not generate summary: {str(e)}")

@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import List, Dict
 
 from core.workflow.tools.notes import (
     GetPatientNotesIds, ReadPatientNote, IdentifyFlag
@@ -18,6 +19,11 @@ from core.workflow.schemas.tool_inputs import (
     GetPatientNotesIdsInput, ReadPatientNoteInput, IdentifyFlagInput,
     GetMedicationsIdsInput, ReadMedicationInput, GetDiagnosisIdsInput, ReadDiagnosisInput,
     AnalyzeFlowsheetInstanceInput
+)
+from core.workflow_service.utils import (
+    create_output_definition, create_output_value,
+    RESOURCE_TYPE_NOTE, RESOURCE_TYPE_MEDICATION, RESOURCE_TYPE_DIAGNOSIS, RESOURCE_TYPE_FLOWSHEET,
+    FIELD_TYPE_BOOLEAN, FIELD_TYPE_TEXT
 )
 
 logger = logging.getLogger(__name__)
@@ -58,9 +64,77 @@ NOTE_FLAG_CRITERIA = {
 }
 
 
-def check_medications(flags, mrn, csn):
-    """Check patient medications against a list of target medications"""
-    medications_to_check = flags["treatment_medications"]["medications"]
+# =============================================================================
+# Output Definitions (created once, reused for all values)
+# =============================================================================
+
+def _build_output_definitions() -> Dict[str, dict]:
+    """Build all output definitions for the delirium workflow."""
+    definitions = {}
+
+    # Treatment medications definition
+    definitions["treatment_medications"] = create_output_definition(
+        name="treatment_medications",
+        label="Treatment Medications",
+        resource_type=RESOURCE_TYPE_MEDICATION,
+        fields=[
+            {"name": "detected", "type": FIELD_TYPE_BOOLEAN},
+            {"name": "matched_medication", "type": FIELD_TYPE_TEXT}
+        ],
+        metadata={"description": "Medications associated with delirium treatment"}
+    )
+
+    # Positive correlation diagnosis definition
+    definitions["positive_correlation_diagnosis"] = create_output_definition(
+        name="positive_correlation_diagnosis",
+        label="Positive Correlation Diagnosis",
+        resource_type=RESOURCE_TYPE_DIAGNOSIS,
+        fields=[
+            {"name": "detected", "type": FIELD_TYPE_BOOLEAN},
+            {"name": "matched_diagnosis", "type": FIELD_TYPE_TEXT}
+        ],
+        metadata={"description": "Diagnoses positively correlated with delirium"}
+    )
+
+    # CAPD (flowsheet analysis) definition
+    definitions["CAPD"] = create_output_definition(
+        name="CAPD",
+        label="CAPD Assessment",
+        resource_type=RESOURCE_TYPE_FLOWSHEET,
+        fields=[
+            {"name": "detected", "type": FIELD_TYPE_BOOLEAN}
+        ],
+        metadata={"description": "Cornell Assessment of Pediatric Delirium"}
+    )
+
+    # Note flag definitions
+    for flag_key, criteria_config in NOTE_FLAG_CRITERIA.items():
+        definitions[flag_key] = create_output_definition(
+            name=flag_key,
+            label=criteria_config["name"],
+            resource_type=RESOURCE_TYPE_NOTE,
+            fields=[
+                {"name": "detected", "type": FIELD_TYPE_BOOLEAN},
+                {"name": "highlighted_text", "type": FIELD_TYPE_TEXT}
+            ],
+            metadata={"criteria": criteria_config["criteria"]}
+        )
+
+    return definitions
+
+
+# Module-level definitions (built once)
+OUTPUT_DEFINITIONS = _build_output_definitions()
+
+
+def check_medications(mrn, csn, medications_to_check: List[str], definitions: Dict[str, dict]) -> List[dict]:
+    """
+    Check patient medications against a list of target medications.
+
+    Returns a list of output value entries for matching medications.
+    """
+    output_values = []
+    definition = definitions["treatment_medications"]
 
     try:
         # Get all medication IDs
@@ -85,16 +159,22 @@ def check_medications(flags, mrn, csn):
                 medication_name = '' if medication_name == 'nan' else medication_name
                 simple_generic_name = '' if simple_generic_name == 'nan' else simple_generic_name
 
-                match_found = False
                 for med_to_check in medications_to_check:
                     if med_to_check.lower() in medication_name or med_to_check.lower() in simple_generic_name:
                         print(f"Found matching medication: {medication_dict.get('medication_name', 'N/A')}")
-                        flags["treatment_medications"]["state"] = True
-                        flags["treatment_medications"]["sources"].append({
-                            "type": "medications",
-                            "details": medication_dict
-                        })
-                        match_found = True
+                        output_values.append(create_output_value(
+                            output_definition_id=definition["id"],
+                            resource_id=medication_dict.get('order_id', medication_id),
+                            values={
+                                "detected": True,
+                                "matched_medication": med_to_check
+                            },
+                            metadata={
+                                "patient_id": str(mrn),
+                                "encounter_id": str(csn),
+                                "resource_details": medication_dict
+                            }
+                        ))
                         break
 
             except Exception as e:
@@ -103,10 +183,17 @@ def check_medications(flags, mrn, csn):
     except Exception as e:
         logger.error(f"Error getting medications for MRN {mrn}, CSN {csn}: {e}")
 
+    return output_values
 
-def check_diagnoses(flags, mrn, csn):
-    """Check patient diagnoses against positive correlation diagnoses"""
-    positive_diagnoses_to_check = flags["positive_correlation_diagnosis"]["diagnoses"]
+
+def check_diagnoses(mrn, csn, diagnoses_to_check: List[str], definitions: Dict[str, dict]) -> List[dict]:
+    """
+    Check patient diagnoses against positive correlation diagnoses.
+
+    Returns a list of output value entries for matching diagnoses.
+    """
+    output_values = []
+    definition = definitions["positive_correlation_diagnosis"]
 
     try:
         # Get all diagnosis IDs
@@ -128,17 +215,23 @@ def check_diagnoses(flags, mrn, csn):
                 if diagnosis_name == 'nan' or not diagnosis_name:
                     continue
 
-                match_found = False
                 # Check if any positive correlation diagnosis is contained in the diagnosis name
-                for positive_diagnosis in positive_diagnoses_to_check:
+                for positive_diagnosis in diagnoses_to_check:
                     if positive_diagnosis.lower() in diagnosis_name:
                         print(f"Found matching diagnosis: {diagnosis_dict.get('diagnosis_name', 'N/A')}")
-                        flags["positive_correlation_diagnosis"]["state"] = True
-                        flags["positive_correlation_diagnosis"]["sources"].append({
-                            "type": "diagnosis",
-                            "details": diagnosis_dict
-                        })
-                        match_found = True
+                        output_values.append(create_output_value(
+                            output_definition_id=definition["id"],
+                            resource_id=diagnosis_dict.get('diagnosis_id', diagnosis_id),
+                            values={
+                                "detected": True,
+                                "matched_diagnosis": positive_diagnosis
+                            },
+                            metadata={
+                                "patient_id": str(mrn),
+                                "encounter_id": str(csn),
+                                "resource_details": diagnosis_dict
+                            }
+                        ))
                         break
 
             except Exception as e:
@@ -147,9 +240,18 @@ def check_diagnoses(flags, mrn, csn):
     except Exception as e:
         logger.error(f"Error getting diagnoses for MRN {mrn}, CSN {csn}: {e}")
 
+    return output_values
 
-def check_flowsheets(flags, mrn, csn):
-    """Check patient flowsheets for CAPD analysis"""
+
+def check_flowsheets(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
+    """
+    Check patient flowsheets for CAPD analysis.
+
+    Returns a list of output value entries for CAPD detections.
+    """
+    output_values = []
+    definition = definitions["CAPD"]
+
     try:
         # Get patient details and extract flowsheet instances for matching CSN
         patient_details = get_patient_details(str(mrn), DATASET)
@@ -166,7 +268,7 @@ def check_flowsheets(flags, mrn, csn):
 
         if not flowsheet_instances:
             print("No flowsheet instances found for analysis")
-            return
+            return output_values
 
         print('Processing flowsheet instances...')
 
@@ -178,10 +280,11 @@ def check_flowsheets(flags, mrn, csn):
             try:
                 print('\n--- Analyzing Flowsheet Instance ---')
 
-                # Get current flag states for analysis
-                sensory_deficit = flags.get("sensory_deficit", {}).get("state", False)
-                motor_deficit = flags.get("motor_deficit", {}).get("state", False)
-                developmental_delay = flags.get("developmental_delay", {}).get("state", False)
+                # Note: sensory_deficit, motor_deficit, developmental_delay would need
+                # to be determined from other results if available
+                sensory_deficit = False
+                motor_deficit = False
+                developmental_delay = False
 
                 print(' About to run AnalyzeFlowsheetInstance with inputs:')
 
@@ -193,21 +296,28 @@ def check_flowsheets(flags, mrn, csn):
                     developmental_delay=developmental_delay
                 ))
 
-                # If analysis returns True, set CAPD flag and add source
+                # If analysis returns True, create CAPD output value
                 if analysis_result:
                     print(f"CAPD detected in flowsheet instance at {timestamp}")
-                    flags["CAPD"]["state"] = True
-                    flags["CAPD"]["sources"].append({
-                        "type": "flowsheet",
-                        "details": {
-                            "flowsheet_instance": instance,
-                            "analysis_inputs": {
-                                "sensory_deficit": sensory_deficit,
-                                "motor_deficit": motor_deficit,
-                                "developmental_delay": developmental_delay
+                    output_values.append(create_output_value(
+                        output_definition_id=definition["id"],
+                        resource_id=instance_id,
+                        values={
+                            "detected": True
+                        },
+                        metadata={
+                            "patient_id": str(mrn),
+                            "encounter_id": str(csn),
+                            "resource_details": {
+                                "flowsheet_instance": instance,
+                                "analysis_inputs": {
+                                    "sensory_deficit": sensory_deficit,
+                                    "motor_deficit": motor_deficit,
+                                    "developmental_delay": developmental_delay
+                                }
                             }
                         }
-                    })
+                    ))
 
             except Exception as e:
                 logger.error(f"Error processing flowsheet instance {instance_id} at {timestamp}: {e}")
@@ -215,41 +325,55 @@ def check_flowsheets(flags, mrn, csn):
     except Exception as e:
         logger.error(f"Error getting flowsheets for MRN {mrn}, CSN {csn}: {e}")
 
+    return output_values
 
-def analyze_single_note_for_flag(note_text, note_dict, note_id, flag_key, criteria_config):
-    """Analyze a single note for a specific flag criteria"""
+
+def analyze_single_note_for_flag(note_text, note_dict, note_id, flag_key, criteria_config, mrn, csn, definitions: Dict[str, dict]):
+    """
+    Analyze a single note for a specific flag criteria.
+
+    Returns an output value entry if detected, None otherwise.
+    """
     criteria_name = criteria_config["name"]
     criteria_text = criteria_config["criteria"]
+    definition = definitions[flag_key]
 
     # Use IdentifyFlag tool to check for the criteria
     flag_result = IdentifyFlag(dataset=DATASET)(inputs=IdentifyFlagInput(text=note_text, criteria=criteria_text))
 
     print(f"{criteria_name} Analysis: {flag_result.flag_state}")
 
-    result = {
-        "flag_detected": flag_result.flag_state,
-        "source_data": None
-    }
+    if not flag_result.flag_state:
+        print(f"  {criteria_name} NOT detected in this note")
+        return None
 
-    if flag_result.flag_state:
-        print(f" {criteria_name} DETECTED in this note")
-        result["source_data"] = {
-            "type": "note",
-            "details": {
-                **note_dict,  # Include all note metadata
-                "criteria": criteria_text,
-                "criteria_name": criteria_name,
-                "highlighted_text": flag_result.formatted_text
-            }
+    print(f"  {criteria_name} DETECTED in this note")
+
+    return create_output_value(
+        output_definition_id=definition["id"],
+        resource_id=note_dict.get('note_id', note_id),
+        values={
+            "detected": True,
+            "highlighted_text": flag_result.formatted_text
+        },
+        metadata={
+            "patient_id": str(mrn),
+            "encounter_id": str(csn),
+            "resource_details": note_dict,
+            "criteria": criteria_text,
+            "criteria_name": criteria_name
         }
-    else:
-        print(f" {criteria_name} NOT detected in this note")
-
-    return result
+    )
 
 
-def check_notes(flags, mrn, csn):
-    """Check patient notes using IdentifyFlag tool for multiple criteria"""
+def check_notes(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
+    """
+    Check patient notes using IdentifyFlag tool for multiple criteria.
+
+    Returns a list of output value entries for all detected flags.
+    """
+    output_values = []
+
     try:
         # Get all note IDs
         note_ids = GetPatientNotesIds(dataset=DATASET)(inputs=GetPatientNotesIdsInput(mrn=mrn, csn=csn))
@@ -258,10 +382,7 @@ def check_notes(flags, mrn, csn):
 
         if not note_ids:
             print("No notes found for this patient encounter.")
-            return
-
-        # Initialize tracking for each flag
-        flag_results = {flag_key: [] for flag_key in NOTE_FLAG_CRITERIA.keys()}
+            return output_values
 
         # Process each note
         for i, note_id in enumerate(note_ids):
@@ -289,15 +410,14 @@ def check_notes(flags, mrn, csn):
 
                 # Analyze this note for each configured flag criteria
                 for flag_key, criteria_config in NOTE_FLAG_CRITERIA.items():
-                    if flag_key in flags:  # Only check flags that exist in the flags dict
-                        print(f"\n  --- {criteria_config['name']} ---")
+                    print(f"\n  --- {criteria_config['name']} ---")
 
-                        result = analyze_single_note_for_flag(note_text, note_dict, note_id, flag_key, criteria_config)
+                    result = analyze_single_note_for_flag(
+                        note_text, note_dict, note_id, flag_key, criteria_config, mrn, csn, definitions
+                    )
 
-                        if result["flag_detected"]:
-                            flags[flag_key]["state"] = True
-                            flags[flag_key]["sources"].append(result["source_data"])
-                            flag_results[flag_key].append(result["source_data"])
+                    if result:
+                        output_values.append(result)
 
             except Exception as e:
                 logger.error(f"Error processing note {note_id}: {e}")
@@ -305,11 +425,14 @@ def check_notes(flags, mrn, csn):
     except Exception as e:
         logger.error(f"Error getting notes for MRN {mrn}, CSN {csn}: {e}")
 
+    return output_values
+
 
 def run_workflow(mrn, csn):
     """
     Run delirium screening workflow on a patient encounter.
-    Returns flags dict with all screening results.
+
+    Returns output definitions and values.
 
     Args:
         mrn: Patient MRN
@@ -319,57 +442,53 @@ def run_workflow(mrn, csn):
         dict: {
             "mrn": mrn,
             "csn": csn,
-            "flags": flags_dict
+            "output_definitions": [definition dicts],
+            "output_values": [value dicts]
         }
     """
-    # Initialize flags with default structure
-    flags = {
-        "DSM_5_criteria_1": {"state": False, "sources": []},
-        "DSM_5_criteria_2": {"state": False, "sources": []},
-        "DSM_5_criteria_3": {"state": False, "sources": []},
+    output_values = []
 
-        "mechanical_ventilation": {"state": False, "sources": []},
-        "post_op_state": {"state": False, "sources": []},
-        "explicit_delirium_mention": {"state": False, "sources": []},
+    # Use fresh definitions for each run (to get unique IDs)
+    definitions = _build_output_definitions()
 
-        "treatment_medications": {
-            "state": False,
-            "medications": ["haloperidol", "risperidone", "quetiapine", "olanzapine", "aripiprazole", "dexmedetomidine", "clonidine"],
-            "sources": []
-        },
-
-        "CAPD": {"state": False, "sources": []},
-
-        "positive_correlation_diagnosis": {"state": False, "diagnoses": ["active infection", "sepsis", "delirium"], "sources": []},
-    }
+    # Configuration for medications and diagnoses to check
+    MEDICATIONS_TO_CHECK = [
+        "haloperidol", "risperidone", "quetiapine", "olanzapine",
+        "aripiprazole", "dexmedetomidine", "clonidine"
+    ]
+    DIAGNOSES_TO_CHECK = ["active infection", "sepsis", "delirium"]
 
     logger.info(f"Starting delirium screening workflow for MRN {mrn}, CSN {csn}")
 
     # Process medications
     try:
         print('Checking medications...')
-        check_medications(flags, mrn, csn)
+        med_values = check_medications(mrn, csn, MEDICATIONS_TO_CHECK, definitions)
+        output_values.extend(med_values)
     except Exception as e:
         logger.error(f"Error in medication check for MRN {mrn}, CSN {csn}: {e}")
 
     # Process diagnoses
     try:
         print('Checking diagnoses...')
-        check_diagnoses(flags, mrn, csn)
+        diag_values = check_diagnoses(mrn, csn, DIAGNOSES_TO_CHECK, definitions)
+        output_values.extend(diag_values)
     except Exception as e:
         logger.error(f"Error in diagnosis check for MRN {mrn}, CSN {csn}: {e}")
 
     # Process flowsheets
     try:
         print('Checking flowsheets...')
-        check_flowsheets(flags, mrn, csn)
+        flowsheet_values = check_flowsheets(mrn, csn, definitions)
+        output_values.extend(flowsheet_values)
     except Exception as e:
         logger.error(f"Error in flowsheet check for MRN {mrn}, CSN {csn}: {e}")
 
     # Process notes
     try:
         print('Checking notes...')
-        check_notes(flags, mrn, csn)
+        note_values = check_notes(mrn, csn, definitions)
+        output_values.extend(note_values)
     except Exception as e:
         logger.error(f"Error in notes check for MRN {mrn}, CSN {csn}: {e}")
 
@@ -378,5 +497,6 @@ def run_workflow(mrn, csn):
     return {
         "mrn": mrn,
         "csn": csn,
-        "flags": flags
+        "output_definitions": list(definitions.values()),
+        "output_values": output_values
     }

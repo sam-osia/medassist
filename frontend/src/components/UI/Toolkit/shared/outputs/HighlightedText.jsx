@@ -41,7 +41,7 @@ function HighlightedText({
         variant="outlined"
         sx={{
           p: 2,
-          backgroundColor: 'grey.50',
+          backgroundColor: 'custom.neutralBackground',
           '& .tool-highlight': {
             backgroundColor: highlightColor,
             padding: '2px 4px',

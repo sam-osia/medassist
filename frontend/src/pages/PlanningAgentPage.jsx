@@ -27,15 +27,13 @@ import {
   Save as SaveIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
-import { planningService, conversationService } from '../services/ApiService';
+import { planningService, conversationService, workflowAgentService } from '../services/ApiService';
 import StepComponent from '../components/UI/Planning/StepComponent';
 import PlanMessageCard from '../components/UI/Planning/PlanMessageCard';
 import ConversationSidebar from '../components/UI/Planning/ConversationSidebar';
 import GeneratedPlanPanel from '../components/UI/Planning/GeneratedPlanPanel';
 import { SavePlanDialog } from '../components/UI/Planning/PlanDialogs';
-import BrandingFooter from '../components/UI/Common/BrandingFooter';
 import { useTheme } from '@mui/material/styles';
-import { getPageGradient } from '../App';
 import ReactMarkdown from 'react-markdown';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -291,18 +289,17 @@ const PlanningAgentPage = () => {
     addLoadingMessage();
 
     try {
-      const response = await planningService.conversationalPlan(
+      const response = await workflowAgentService.processMessage(
         prompt.trim(),
-        0,
-        0,
-        null,
-        null, // No existing plan for initial submission
-        currentConversationId // Send conversation ID
+        currentConversationId,
+        0,  // mrn
+        0,  // csn
+        null  // dataset
       );
-      
+
       // Remove loading message
       removeLoadingMessage();
-      
+
       // Handle different response types
       if (response.data.response_type === "text") {
         // Add only assistant text message
@@ -310,40 +307,23 @@ const PlanningAgentPage = () => {
           type: 'assistant',
           content: response.data.message
         });
-      } else if (response.data.response_type === "plan") {
-        // Extract plan data from response
-        const planData = response.data.plan_data;
-        
+      } else if (response.data.response_type === "workflow") {
+        // Extract workflow data from response
+        const workflowData = response.data.workflow_data;
+
         // Set result for right panel display
         setResult({
-          raw_plan: planData.raw_plan
+          raw_plan: workflowData.raw_plan
         });
-        
+
         // Add assistant message
         addMessageToHistory({
           type: 'assistant',
           content: response.data.message
         });
-        
-        // Add plan object to chat
-        addPlanToHistory(planData, response.data.message);
-      } else if (response.data.response_type === "hybrid") {
-        // Extract plan data from response
-        const planData = response.data.plan_data;
-        
-        // Set result for right panel display
-        setResult({
-          raw_plan: planData.raw_plan
-        });
-        
-        // Add assistant message
-        addMessageToHistory({
-          type: 'assistant',
-          content: response.data.message
-        });
-        
-        // Add plan object to chat
-        addPlanToHistory(planData, response.data.message);
+
+        // Add plan object to chat (using workflow_data as planData for compatibility)
+        addPlanToHistory({ raw_plan: workflowData.raw_plan }, response.data.message);
       }
 
       // Refresh conversations list to show new conversation
@@ -352,7 +332,7 @@ const PlanningAgentPage = () => {
     } catch (err) {
       // Remove loading message on error
       removeLoadingMessage();
-      setError(err.response?.data?.detail || 'An error occurred while generating the plan');
+      setError(err.response?.data?.detail || 'An error occurred while generating the workflow');
     } finally {
       setLoading(false);
       setAwaitingResponse(false);
@@ -562,19 +542,18 @@ const PlanningAgentPage = () => {
     addLoadingMessage();
 
     try {
-      // Use conversationalPlan for all chat interactions
-      const response = await planningService.conversationalPlan(
+      // Use workflowAgentService for all chat interactions
+      const response = await workflowAgentService.processMessage(
         userMessage,
-        0,
-        0,
-        null,
-        result?.raw_plan, // Pass current plan as context if it exists
-        conversationId // Send conversation ID
+        conversationId,
+        0,  // mrn
+        0,  // csn
+        null  // dataset
       );
-      
+
       // Remove loading message
       removeLoadingMessage();
-      
+
       // Handle different response types
       if (response.data.response_type === "text") {
         // Add only assistant text message
@@ -582,40 +561,23 @@ const PlanningAgentPage = () => {
           type: 'assistant',
           content: response.data.message
         });
-      } else if (response.data.response_type === "plan") {
-        // Extract plan data from response
-        const planData = response.data.plan_data;
-        
+      } else if (response.data.response_type === "workflow") {
+        // Extract workflow data from response
+        const workflowData = response.data.workflow_data;
+
         // Set result for right panel display
         setResult({
-          raw_plan: planData.raw_plan
+          raw_plan: workflowData.raw_plan
         });
-        
+
         // Add assistant message
         addMessageToHistory({
           type: 'assistant',
           content: response.data.message
         });
-        
-        // Add plan object to chat
-        addPlanToHistory(planData, response.data.message);
-      } else if (response.data.response_type === "hybrid") {
-        // Extract plan data from response
-        const planData = response.data.plan_data;
-        
-        // Set result for right panel display
-        setResult({
-          raw_plan: planData.raw_plan
-        });
-        
-        // Add assistant message
-        addMessageToHistory({
-          type: 'assistant',
-          content: response.data.message
-        });
-        
-        // Add plan object to chat
-        addPlanToHistory(planData, response.data.message);
+
+        // Add plan object to chat (using workflow_data as planData for compatibility)
+        addPlanToHistory({ raw_plan: workflowData.raw_plan }, response.data.message);
       }
 
       // Refresh conversations list to update last_message_date
@@ -624,7 +586,7 @@ const PlanningAgentPage = () => {
     } catch (err) {
       // Remove loading message on error
       removeLoadingMessage();
-      
+
       // Add error message to chat
       addMessageToHistory({
         type: 'assistant',
@@ -636,7 +598,7 @@ const PlanningAgentPage = () => {
   };
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex', height: 'calc(100vh - 65px)', overflow: 'hidden' }}>
       {/* Conversation Sidebar - Always visible */}
       <ConversationSidebar
         conversations={conversations}
@@ -653,11 +615,12 @@ const PlanningAgentPage = () => {
       {/* Main content area */}
       <Box sx={{
         flex: 1,
-        minHeight: '100vh',
-        background: getPageGradient(theme),
-        py: 1
+        height: '100%',
+        background: theme.pageGradient,
+        py: 1,
+        overflow: 'hidden'
       }}>
-        <Box sx={{ mt: 1, px: 3 }}>
+        <Box sx={{ height: '100%', px: 3, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
 
           {/* Conditional Layout Based on View Mode */}
         {selectedPlanName && result ? (
@@ -898,7 +861,7 @@ const PlanningAgentPage = () => {
                                 p: 1.5,
                                 borderRadius: 2,
                                 backgroundColor: message.type === 'user'
-                                  ? 'grey.200'
+                                  ? 'custom.alternateRow'
                                   : 'transparent',
                                 color: 'text.primary',
                                 wordBreak: 'break-word'
@@ -994,8 +957,6 @@ const PlanningAgentPage = () => {
           </Box>
           </>
         )}
-        
-          <BrandingFooter />
         </Box>
       </Box>
 

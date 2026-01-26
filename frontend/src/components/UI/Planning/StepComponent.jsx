@@ -889,11 +889,11 @@ const StepComponent = ({ step, stepNumber, depth = 0, originalPrompt, originalPl
           backgroundColor: 'background.paper',
           opacity: 0.8,
           backdropFilter: 'blur(8px)',
-          border: '1px solid rgba(0,0,0,0.08)',
+          border: (theme) => `1px solid ${theme.palette.custom.subtleBorder}`,
           borderRadius: { xs: 1.5, sm: 2 },
-          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          boxShadow: (theme) => `0 1px 3px ${theme.palette.custom.subtleShadow}`,
           '&:hover': {
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            boxShadow: (theme) => `0 4px 12px ${theme.palette.custom.hoverShadow}`,
             borderColor: config.color,
             transform: 'translateY(-1px)'
           },

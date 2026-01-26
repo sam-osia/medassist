@@ -11,7 +11,6 @@ import {
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
-import { getPageGradient } from '../App';
 import { datasetsService, projectsService } from '../services/ApiService';
 import DatasetsSummaryCard from '../components/UI/Datasets/DatasetsSummaryCard';
 import CreateDatasetDialog from '../components/UI/Datasets/CreateDatasetDialog';
@@ -96,7 +95,7 @@ const DashboardPage = () => {
     <Box
       sx={{
         minHeight: '100vh',
-        background: getPageGradient(theme),
+        background: theme.pageGradient,
         py: 4
       }}
     >

@@ -16,7 +16,7 @@ from jinja2 import Template
 
 class GetPatientNotesIds(Tool):
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
     
     @property
@@ -70,7 +70,7 @@ class GetPatientNotesIds(Tool):
 
 class ReadPatientNote(Tool):
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
     
     @property
@@ -129,7 +129,7 @@ class ReadPatientNote(Tool):
 
 class SummarizePatientNote(Tool):
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
     
     @property
@@ -203,7 +203,7 @@ class SummarizePatientNote(Tool):
 
 class HighlightPatientNote(Tool):
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
     
     @property
@@ -301,7 +301,7 @@ class HighlightPatientNote(Tool):
 
 class AnalyzeNoteWithSpanAndReason:
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property
@@ -421,7 +421,7 @@ class AnalyzeNoteWithSpanAndReason:
 
 class KeywordCount(Tool):
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
     
     @property
@@ -542,7 +542,7 @@ class KeywordCount(Tool):
 
 class IdentifyFlag(Tool):
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
     
     @property

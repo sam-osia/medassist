@@ -15,23 +15,23 @@ class ExperimentCache:
     """Thread-safe singleton cache for experiment data."""
     _instance = None
     _lock = Lock()
-    
+
     def __new__(cls):
         with cls._lock:
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
                 cls._instance._initialized = False
             return cls._instance
-    
+
     def __init__(self):
         if self._initialized:
             return
-            
+
         with self._lock:
             if not self._initialized:
                 self._index = None
                 self._initialized = True
-    
+
     def get_index(self) -> Optional[Dict[str, Any]]:
         """Get cached experiment index, loading it if necessary."""
         if self._index is None:
@@ -39,16 +39,16 @@ class ExperimentCache:
                 if self._index is None:  # Double-check lock pattern
                     self._index = self._build_index()
         return self._index
-    
+
     def invalidate(self):
         """Clear the cached index."""
         with self._lock:
             self._index = None
-    
+
     def _build_index(self) -> Dict[str, Any]:
         """Build experiment index by scanning all experiment folders."""
         logger.info("Building experiment index...")
-        
+
         patient_index = {}  # mrn -> list of experiment info
         experiment_index = {}  # experiment_name -> metadata + summary
 
@@ -87,89 +87,93 @@ class ExperimentCache:
                     "total_flags_detected": 0
                 }
 
-                # Process each patient in the experiment
-                for patient in results.get("patients", []):
-                    mrn = str(patient.get("mrn", ""))
-                    if not mrn:
+                output_values = results.get("output_values", [])
+
+                # Track unique patients and encounters
+                patients_seen = set()
+                encounters_seen = {}  # (mrn, csn) -> flags_detected count
+
+                for v in output_values:
+                    patient_id = v.get("metadata", {}).get("patient_id", "")
+                    encounter_id = v.get("metadata", {}).get("encounter_id", "")
+
+                    if not patient_id:
                         continue
 
-                    experiment_info["patient_count"] += 1
+                    patients_seen.add(str(patient_id))
+                    enc_key = (str(patient_id), str(encounter_id))
 
-                    for encounter in patient.get("encounters", []):
-                        csn = encounter.get("csn")
-                        flags = encounter.get("flags", {})
+                    if enc_key not in encounters_seen:
+                        encounters_seen[enc_key] = 0
 
-                        experiment_info["total_encounters"] += 1
+                    # Count detected flags
+                    if v.get("values", {}).get("detected") is True:
+                        encounters_seen[enc_key] += 1
+                        experiment_info["total_flags_detected"] += 1
 
-                        # Count detected flags (excluding threshold values)
-                        flags_detected = sum(
-                            1 for flag_name, flag_data in flags.items()
-                            if not flag_name.endswith('_threshold')
-                            and isinstance(flag_data, dict)
-                            and flag_data.get('state') is True
-                        )
+                experiment_info["patient_count"] = len(patients_seen)
+                experiment_info["total_encounters"] = len(encounters_seen)
 
-                        experiment_info["total_flags_detected"] += flags_detected
+                # Add to patient index
+                for (mrn, csn), flags_detected in encounters_seen.items():
+                    if mrn not in patient_index:
+                        patient_index[mrn] = []
 
-                        # Add to patient index
-                        if mrn not in patient_index:
-                            patient_index[mrn] = []
-
-                        patient_index[mrn].append({
-                            "experiment_name": experiment_name,
-                            "csn": csn,
-                            "run_date": metadata.get("created_date"),
-                            "flags_detected": flags_detected
-                        })
+                    patient_index[mrn].append({
+                        "experiment_name": experiment_name,
+                        "csn": csn,
+                        "run_date": metadata.get("created_date"),
+                        "flags_detected": flags_detected
+                    })
 
                 experiment_index[experiment_name] = experiment_info
 
             except Exception as e:
                 logger.error(f"Error processing experiment {experiment_name}: {e}")
                 continue
-        
+
         logger.info(f"Built index with {len(experiment_index)} experiments and {len(patient_index)} patients")
-        
+
         return {
             "patient_index": patient_index,
             "experiment_index": experiment_index,
             "built_at": datetime.datetime.now().isoformat()
         }
-    
+
     def get_experiments_for_patient(self, mrn: str) -> List[Dict[str, Any]]:
         """Get all experiments containing a specific patient."""
         index = self.get_index()
         if not index:
             return []
-        
+
         patient_experiments = index["patient_index"].get(str(mrn), [])
-        
+
         # Enrich with experiment metadata
         enriched_experiments = []
         for exp_info in patient_experiments:
             experiment_name = exp_info["experiment_name"]
             experiment_meta = index["experiment_index"].get(experiment_name, {})
-            
+
             enriched_experiments.append({
                 **exp_info,
                 "experiment_metadata": experiment_meta.get("metadata", {}),
                 "total_patients": experiment_meta.get("patient_count", 0)
             })
-        
+
         # Sort by run date (newest first)
         enriched_experiments.sort(
-            key=lambda x: x.get("run_date", ""), 
+            key=lambda x: x.get("run_date", ""),
             reverse=True
         )
-        
+
         return enriched_experiments
-    
+
     def get_all_experiments(self) -> List[Dict[str, Any]]:
         """Get all experiments with summary information."""
         index = self.get_index()
         if not index:
             return []
-        
+
         experiments = []
         for experiment_name, experiment_info in index["experiment_index"].items():
             experiments.append({
@@ -179,15 +183,15 @@ class ExperimentCache:
                 "total_encounters": experiment_info["total_encounters"],
                 "total_flags_detected": experiment_info["total_flags_detected"]
             })
-        
+
         # Sort by creation date (newest first)
         experiments.sort(
-            key=lambda x: x.get("created_date", ""), 
+            key=lambda x: x.get("created_date", ""),
             reverse=True
         )
-        
+
         return experiments
-    
+
     def get_experiment_details(self, experiment_name: str) -> Optional[Dict[str, Any]]:
         """Load full experiment details from disk."""
         experiment_path = os.path.join(EXPERIMENTS_DIR, experiment_name)

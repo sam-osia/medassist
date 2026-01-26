@@ -1,20 +1,32 @@
 import React from 'react';
 
+// Default highlight colors (used when theme colors not provided)
+const DEFAULT_HIGHLIGHT_BG = '#ffeb3b';
+const DEFAULT_HIGHLIGHT_TEXT = '#000000';
+
 /**
  * Parse text containing <highlight></highlight> tags and convert to React elements
  * with highlighted spans styled in yellow background.
- * 
+ *
  * @param {string} text - Text containing <highlight></highlight> tags
+ * @param {Object} options - Optional styling options
+ * @param {string} options.backgroundColor - Highlight background color (default: theme highlight or yellow)
+ * @param {string} options.textColor - Highlight text color (default: theme contrastText or black)
  * @returns {React.ReactNode[]} Array of React elements with highlighted spans
  */
-export const parseHighlightedText = (text) => {
+export const parseHighlightedText = (text, options = {}) => {
   if (!text || typeof text !== 'string') {
     return [text];
   }
 
+  const {
+    backgroundColor = DEFAULT_HIGHLIGHT_BG,
+    textColor = DEFAULT_HIGHLIGHT_TEXT,
+  } = options;
+
   // Split the text by highlight tags while preserving the tags
   const parts = text.split(/(<highlight>.*?<\/highlight>)/g);
-  
+
   return parts.map((part, index) => {
     // Check if this part is a highlighted section
     if (part.startsWith('<highlight>') && part.endsWith('</highlight>')) {
@@ -24,8 +36,8 @@ export const parseHighlightedText = (text) => {
         <span
           key={index}
           style={{
-            backgroundColor: '#ffeb3b', // Yellow highlighting
-            color: '#000',
+            backgroundColor,
+            color: textColor,
             fontWeight: 'bold',
             padding: '2px 4px',
             borderRadius: '3px',
@@ -36,7 +48,7 @@ export const parseHighlightedText = (text) => {
         </span>
       );
     }
-    
+
     // Return non-highlighted text as-is
     return part;
   });

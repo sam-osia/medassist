@@ -1,8 +1,11 @@
 """Prompt filler agent - fills in prompt fields for tools that need them."""
 
 import json
+import logging
 from pathlib import Path
 from copy import deepcopy
+
+logger = logging.getLogger("workflow.agents")
 
 from pydantic import BaseModel
 
@@ -59,6 +62,8 @@ Be specific and actionable in your prompts."""
 
     def run(self, inputs: PromptFillerInput) -> PromptFillerOutput:
         """Fill in null prompts in the workflow."""
+        logger.info(f"[{self.name}] called")
+        logger.debug(f"[{self.name}] user_intent: {inputs.user_intent}")
         try:
             # Deep copy to avoid mutating original
             workflow_dict = inputs.workflow.model_dump()
@@ -74,12 +79,14 @@ Be specific and actionable in your prompts."""
             # Parse back to Workflow
             filled_workflow = Workflow.model_validate(workflow_dict)
 
+            logger.info(f"[{self.name}] success")
             return PromptFillerOutput(
                 workflow=filled_workflow,
                 success=True
             )
 
         except Exception as e:
+            logger.error(f"[{self.name}] error: {e}")
             return PromptFillerOutput(
                 workflow=inputs.workflow,
                 success=False,

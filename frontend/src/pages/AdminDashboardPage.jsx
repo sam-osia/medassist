@@ -41,7 +41,6 @@ import {
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
-import { getPageGradient } from '../App';
 import { useAuth } from '../contexts/AuthProvider';
 import { usersService, datasetsService, projectsService } from '../services/ApiService';
 
@@ -384,7 +383,7 @@ const AdminDashboardPage = () => {
     <Box
       sx={{
         minHeight: '100vh',
-        background: getPageGradient(theme),
+        background: theme.pageGradient,
         py: 4
       }}
     >

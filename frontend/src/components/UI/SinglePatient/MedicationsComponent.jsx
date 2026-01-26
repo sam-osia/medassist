@@ -26,7 +26,6 @@ import './ProcessingIndicators.css';
 const MedicationRow = ({
   medication,
   index,
-  isHighlighted = false,
   isProcessing = false,
   annotationMode = false,
   isAnnotated = false,
@@ -48,11 +47,10 @@ const MedicationRow = ({
       key={`${medication.order_id}-${medication.admin_line_num}` || index}
       sx={{
         '&:last-child td, &:last-child th': { border: 0 },
-        backgroundColor: isHighlighted ? '#fff9c4' : (isBeingProcessed ? '#e8f5e8' : 'transparent'),
-        borderLeft: isHighlighted ? '4px solid #ffa726' : 'none',
+        backgroundColor: isBeingProcessed ? '#e8f5e8' : 'transparent',
         fontWeight: isBeingProcessed ? 'bold' : 'normal',
         '&:hover': {
-          backgroundColor: isHighlighted ? '#fff59d' : (isBeingProcessed ? '#d4f0d4' : 'rgba(0, 0, 0, 0.04)')
+          backgroundColor: isBeingProcessed ? '#d4f0d4' : 'custom.tableRowHover'
         }
       }}
     >
@@ -123,7 +121,6 @@ const MedicationsComponent = ({
   medications = [],
   mrn,
   csn,
-  highlightedItems = [],
   annotationMode = false,
   annotationMap = new Map(),
   onAnnotateClick
@@ -206,7 +203,7 @@ const MedicationsComponent = ({
         >
           <Table sx={{ minWidth: 650 }} aria-label="medications table">
             <TableHead>
-              <TableRow sx={{ backgroundColor: 'grey.50' }}>
+              <TableRow sx={{ backgroundColor: 'action.hover' }}>
                 <TableCell><strong>Order ID</strong></TableCell>
                 <TableCell><strong>Medication Name</strong></TableCell>
                 <TableCell><strong>Generic Name</strong></TableCell>
@@ -223,7 +220,6 @@ const MedicationsComponent = ({
                   key={`${medication.order_id}-${medication.admin_line_num}` || index}
                   medication={medication}
                   index={index}
-                  isHighlighted={highlightedItems.includes(medication.order_id)}
                   isProcessing={isItemProcessing('medications', medication.order_id)}
                   annotationMode={annotationMode}
                   isAnnotated={annotationMap.has(String(medication.order_id))}

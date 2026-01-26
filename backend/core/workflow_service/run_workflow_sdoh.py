@@ -1,12 +1,18 @@
 import json
 import logging
 import re
+from typing import List, Dict
 
 from core.workflow.tools.notes import (
     GetPatientNotesIds, ReadPatientNote, AnalyzeNoteWithSpanAndReason
 )
 from core.workflow.schemas.tool_inputs import (
     GetPatientNotesIdsInput, ReadPatientNoteInput, AnalyzeNoteWithSpanAndReasonInput, PromptInput
+)
+from core.workflow_service.utils import (
+    create_output_definition, create_output_value,
+    RESOURCE_TYPE_NOTE,
+    FIELD_TYPE_BOOLEAN, FIELD_TYPE_TEXT
 )
 
 logger = logging.getLogger(__name__)
@@ -58,78 +64,6 @@ def create_highlighted_text(note_text, span_text):
         return f"{clean_note}\n\nSpan:\n{span_text}"
 
 
-def analyze_single_note_for_flag(note_text, note_dict, criteria_config):
-    """Analyze a single note for a specific SDOH flag criteria"""
-    criteria_name = criteria_config['name']
-    criteria_text = criteria_config['criteria']
-
-    flag_result = AnalyzeNoteWithSpanAndReason(dataset=DATASET)(
-        inputs=AnalyzeNoteWithSpanAndReasonInput(
-            note=note_text,
-            prompt=criteria_config['prompt'],
-        ))
-
-    result = {
-        "flag_detected": flag_result.flag_state,
-        'source_data': None
-    }
-
-    highlighted_text = create_highlighted_text(note_text, flag_result.span)
-
-    if flag_result.flag_state:
-        result["source_data"] = {
-            "type": "note",
-            "details": {
-                **note_dict,
-                "criteria": criteria_text,
-                "criteria_name": criteria_name,
-                "highlighted_text": highlighted_text,
-                "reasoning": flag_result.reasoning
-            }
-        }
-
-    return result
-
-
-def analyze_notes(flags, mrn, csn):
-    """Analyze patient notes for SDOH flags"""
-    try:
-        note_ids = GetPatientNotesIds(dataset=DATASET)(inputs=GetPatientNotesIdsInput(mrn=mrn, csn=csn))
-
-        if not note_ids:
-            print("No notes found for this patient encounter.")
-            return
-
-        # Initialize tracking for each flag
-        flag_results = {flag_key: [] for flag_key in NOTE_FLAG_CRITERIA.keys()}
-
-        for i, note_id in enumerate(note_ids):
-            try:
-                note_json_string = ReadPatientNote(dataset=DATASET)(
-                    inputs=ReadPatientNoteInput(mrn=mrn, csn=csn, note_id=note_id))
-                note_dict = json.loads(note_json_string)
-                note_text = note_dict.get('note_text', '')
-
-                note_text = clean_text(note_text)
-
-                if not note_text or note_text.strip() == '':
-                    continue
-
-                for flag_key, criteria_config in NOTE_FLAG_CRITERIA.items():
-                    if flag_key in flags:
-                        result = analyze_single_note_for_flag(note_text, note_dict, criteria_config)
-                        if result["flag_detected"]:
-                            flags[flag_key]["state"] = True
-                            flags[flag_key]["sources"].append(result["source_data"])
-                            flag_results[flag_key].append(result["source_data"])
-
-            except Exception as e:
-                logger.error(f"Error processing note {note_id}: {e}")
-
-    except Exception as e:
-        logger.error(f"Error getting notes for MRN {mrn}, CSN {csn}: {e}")
-
-
 # Configuration for flag detection criteria that are based on notes
 NOTE_FLAG_CRITERIA = {
     'Language barrier': {
@@ -171,10 +105,117 @@ NOTE_FLAG_CRITERIA = {
 }
 
 
+def _build_output_definitions() -> Dict[str, dict]:
+    """Build all output definitions for the SDOH workflow."""
+    definitions = {}
+
+    # Note flag definitions for each SDOH indicator
+    for flag_key, criteria_config in NOTE_FLAG_CRITERIA.items():
+        definitions[flag_key] = create_output_definition(
+            name=flag_key,
+            label=criteria_config["name"],
+            resource_type=RESOURCE_TYPE_NOTE,
+            fields=[
+                {"name": "detected", "type": FIELD_TYPE_BOOLEAN},
+                {"name": "span", "type": FIELD_TYPE_TEXT},
+                {"name": "reasoning", "type": FIELD_TYPE_TEXT},
+                {"name": "highlighted_text", "type": FIELD_TYPE_TEXT}
+            ],
+            metadata={"criteria": criteria_config["criteria"]}
+        )
+
+    return definitions
+
+
+def analyze_single_note_for_flag(note_text, note_dict, criteria_config, mrn, csn, flag_key, definitions: Dict[str, dict]):
+    """
+    Analyze a single note for a specific SDOH flag criteria.
+
+    Returns an output value entry if detected, None otherwise.
+    """
+    criteria_name = criteria_config['name']
+    criteria_text = criteria_config['criteria']
+    definition = definitions[flag_key]
+
+    flag_result = AnalyzeNoteWithSpanAndReason(dataset=DATASET)(
+        inputs=AnalyzeNoteWithSpanAndReasonInput(
+            note=note_text,
+            prompt=criteria_config['prompt'],
+        ))
+
+    if not flag_result.flag_state:
+        return None
+
+    highlighted_text = create_highlighted_text(note_text, flag_result.span)
+
+    # Create output value entry
+    return create_output_value(
+        output_definition_id=definition["id"],
+        resource_id=note_dict.get('note_id', ''),
+        values={
+            "detected": True,
+            "span": flag_result.span,
+            "reasoning": flag_result.reasoning,
+            "highlighted_text": highlighted_text
+        },
+        metadata={
+            "patient_id": str(mrn),
+            "encounter_id": str(csn),
+            "resource_details": note_dict,
+            "criteria": criteria_text,
+            "criteria_name": criteria_name
+        }
+    )
+
+
+def analyze_notes(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
+    """
+    Analyze patient notes for SDOH flags.
+
+    Returns a list of output value entries for all detected flags.
+    """
+    output_values = []
+
+    try:
+        note_ids = GetPatientNotesIds(dataset=DATASET)(inputs=GetPatientNotesIdsInput(mrn=mrn, csn=csn))
+
+        if not note_ids:
+            print("No notes found for this patient encounter.")
+            return output_values
+
+        for i, note_id in enumerate(note_ids):
+            try:
+                note_json_string = ReadPatientNote(dataset=DATASET)(
+                    inputs=ReadPatientNoteInput(mrn=mrn, csn=csn, note_id=note_id))
+                note_dict = json.loads(note_json_string)
+                note_text = note_dict.get('note_text', '')
+
+                note_text = clean_text(note_text)
+
+                if not note_text or note_text.strip() == '':
+                    continue
+
+                for flag_key, criteria_config in NOTE_FLAG_CRITERIA.items():
+                    result = analyze_single_note_for_flag(
+                        note_text, note_dict, criteria_config, mrn, csn, flag_key, definitions
+                    )
+                    if result:
+                        output_values.append(result)
+
+            except Exception as e:
+                logger.error(f"Error processing note {note_id}: {e}")
+
+    except Exception as e:
+        logger.error(f"Error getting notes for MRN {mrn}, CSN {csn}: {e}")
+
+    return output_values
+
+
 def run_workflow(mrn, csn, prompts):
     """
     Run SDOH screening workflow on a patient encounter.
-    Returns flags dict with all screening results.
+
+    Returns output definitions and values.
 
     Args:
         mrn: Patient MRN
@@ -185,21 +226,14 @@ def run_workflow(mrn, csn, prompts):
         dict: {
             "mrn": mrn,
             "csn": csn,
-            "flags": flags_dict
+            "output_definitions": [definition dicts],
+            "output_values": [value dicts]
         }
     """
-    # Initialize flags with default structure
-    flags = {
-        'Language barrier': {"state": False, "sources": []},
-        'Financial strain': {"state": False, "sources": []},
-        'Social isolation': {"state": False, "sources": []},
-        'Housing insecurity': {"state": False, "sources": []},
-        'Depression': {"state": False, "sources": []},
-        'Addiction': {"state": False, "sources": []},
-        'Food insecurity': {"state": False, "sources": []},
-        'Transportation': {"state": False, "sources": []},
-        'Health literacy': {"state": False, "sources": []}
-    }
+    output_values = []
+
+    # Use fresh definitions for each run (to get unique IDs)
+    definitions = _build_output_definitions()
 
     # Populate prompts from the workflow plan
     for i, flag_key in enumerate(NOTE_FLAG_CRITERIA.keys()):
@@ -210,7 +244,8 @@ def run_workflow(mrn, csn, prompts):
     # Analyze notes for SDOH flags
     try:
         print('Analyzing notes for SDOH indicators...')
-        analyze_notes(flags, mrn, csn)
+        note_values = analyze_notes(mrn, csn, definitions)
+        output_values.extend(note_values)
     except Exception as e:
         logger.error(f"Error in SDOH note analysis for MRN {mrn}, CSN {csn}: {e}")
 
@@ -219,5 +254,6 @@ def run_workflow(mrn, csn, prompts):
     return {
         "mrn": mrn,
         "csn": csn,
-        "flags": flags
+        "output_definitions": list(definitions.values()),
+        "output_values": output_values
     }

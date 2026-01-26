@@ -20,7 +20,7 @@ import {
 // Removed streaming hooks as part of simplification
 import { useProcessing } from '../../../contexts/ProcessingContext';
 
-const FlowsheetsInstanceComponent = ({ flowsheet_instances, mrn, csn, highlightedItems = [] }) => {
+const FlowsheetsInstanceComponent = ({ flowsheet_instances, mrn, csn }) => {
   // Use processing context
   const { isItemProcessing, getProcessingCount } = useProcessing();
 
@@ -159,22 +159,9 @@ const FlowsheetsInstanceComponent = ({ flowsheet_instances, mrn, csn, highlighte
                   }
                 }
 
-                // Check if this measurement is highlighted (used for CAPD scores or other flagged measurements)
-                const isHighlighted = displayName.toLowerCase().includes('capd') && highlightedItems.some(item => 
-                  typeof item === 'string' && item.includes(measurementKey)
-                );
-
                 return (
-                  <TableRow key={rowIndex} sx={{ 
-                    '&:last-child td, &:last-child th': { border: 0 },
-                    backgroundColor: isHighlighted ? 'warning.light' : 'transparent',
-                    opacity: isHighlighted ? 0.3 : 1,
-                    borderLeft: isHighlighted ? '4px solid' : 'none',
-                    borderColor: isHighlighted ? 'warning.main' : undefined,
-                    '&:hover': {
-                      backgroundColor: isHighlighted ? 'warning.main' : undefined,
-                      opacity: isHighlighted ? 0.4 : undefined
-                    }
+                  <TableRow key={rowIndex} sx={{
+                    '&:last-child td, &:last-child th': { border: 0 }
                   }}>
                     <TableCell sx={{ position: 'sticky', left: 0, backgroundColor: 'inherit' }}>
                       <Typography variant="body2" sx={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>

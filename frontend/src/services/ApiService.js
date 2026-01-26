@@ -306,3 +306,16 @@ export const annotationsService = {
     deleteAnnotation: (projectName, groupId, itemId) =>
         ApiService.delete(`/projects/${projectName}/annotations/groups/${groupId}/values/${itemId}`)
 };
+
+// New workflow agent service (multi-agent system)
+export const workflowAgentService = {
+    // Process a message through the workflow agent
+    processMessage: (message, conversationId = null, mrn = 0, csn = 0, dataset = null) =>
+        ApiService.post('/workflow-agent/message', {
+            message,
+            conversation_id: conversationId,
+            mrn,
+            csn,
+            dataset
+        }),
+};

@@ -8,12 +8,11 @@ import {
   CardContent
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { getPageGradient } from '../App';
 import { toolsService } from '../services/ApiService';
 import ToolComponent from '../components/UI/Toolkit/ToolComponent';
 import ToolSidebar from '../components/UI/Toolkit/ToolSidebar';
 
-const ToolPlaygroundPage = () => {
+const ToolkitPlaygroundPage = () => {
   const theme = useTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -61,7 +60,7 @@ const ToolPlaygroundPage = () => {
       {/* Main Content Area */}
       <Box sx={{
         flex: 1,
-        background: getPageGradient(theme),
+        background: theme.pageGradient,
         py: 3,
         px: 4,
         overflow: 'hidden'
@@ -98,4 +97,4 @@ const ToolPlaygroundPage = () => {
   );
 };
 
-export default ToolPlaygroundPage;
+export default ToolkitPlaygroundPage;

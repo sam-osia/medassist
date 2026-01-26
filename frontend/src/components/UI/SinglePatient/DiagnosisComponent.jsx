@@ -26,7 +26,6 @@ import './ProcessingIndicators.css';
 const DiagnosisRow = ({
   diagnosis,
   index,
-  isHighlighted = false,
   isProcessing = false,
   annotationMode = false,
   isAnnotated = false,
@@ -48,11 +47,10 @@ const DiagnosisRow = ({
       key={diagnosis.diagnosis_id || index}
       sx={{
         '&:last-child td, &:last-child th': { border: 0 },
-        backgroundColor: isHighlighted ? '#fff9c4' : (isBeingProcessed ? '#e8f5e8' : 'transparent'),
-        borderLeft: isHighlighted ? '4px solid #ffa726' : 'none',
+        backgroundColor: isBeingProcessed ? '#e8f5e8' : 'transparent',
         fontWeight: isBeingProcessed ? 'bold' : 'normal',
         '&:hover': {
-          backgroundColor: isHighlighted ? '#fff59d' : (isBeingProcessed ? '#d4f0d4' : 'rgba(0, 0, 0, 0.04)')
+          backgroundColor: isBeingProcessed ? '#d4f0d4' : 'custom.tableRowHover'
         }
       }}
     >
@@ -108,7 +106,6 @@ const DiagnosisComponent = ({
   diagnoses = [],
   mrn,
   csn,
-  highlightedItems = [],
   annotationMode = false,
   annotationMap = new Map(),
   onAnnotateClick
@@ -190,7 +187,7 @@ const DiagnosisComponent = ({
         >
           <Table sx={{ minWidth: 650 }} aria-label="diagnosis table">
             <TableHead>
-              <TableRow sx={{ backgroundColor: 'grey.50' }}>
+              <TableRow sx={{ backgroundColor: 'action.hover' }}>
                 <TableCell><strong>Diagnosis ID</strong></TableCell>
                 <TableCell><strong>Diagnosis Name</strong></TableCell>
                 <TableCell><strong>Diagnosis Code</strong></TableCell>
@@ -207,7 +204,6 @@ const DiagnosisComponent = ({
                   key={diagnosis.diagnosis_id || index}
                   diagnosis={diagnosis}
                   index={index}
-                  isHighlighted={highlightedItems.includes(diagnosis.diagnosis_id)}
                   isProcessing={isItemProcessing('diagnoses', diagnosis.diagnosis_id)}
                   annotationMode={annotationMode}
                   isAnnotated={annotationMap.has(String(diagnosis.diagnosis_id))}

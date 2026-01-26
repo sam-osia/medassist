@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
-import { Box, CircularProgress, Typography, Switch } from '@mui/material';
+import { Box, CircularProgress } from '@mui/material';
 import { AuthProvider, useAuth } from './contexts/AuthProvider';
+import { ThemeModeProvider, useThemeMode } from './contexts/ThemeProvider';
 import CssBaseline from '@mui/material/CssBaseline';
 import PatientsChartPage from './pages/PatientsChartPage';
 import SinglePatientPage from './pages/SinglePatientPage';
 import PlanningAgentPage from './pages/PlanningAgentPage';
-import ToolPlaygroundPage from './pages/ToolPlaygroundPage';
+import ToolkitPlaygroundPage from './pages/ToolkitPlaygroundPage';
 import ProjectsPage from './pages/ProjectsPage';
 import IndividualProjectPage from './pages/IndividualProjectPage';
 import DatasetsPage from './pages/DatasetsPage';
@@ -17,7 +18,7 @@ import AdminDashboardPage from './pages/AdminDashboardPage';
 import CaboodlePage from './pages/CaboodlePage';
 import DashboardPage from './pages/DashboardPage';
 import Navbar from './components/UI/Common/Navbar';
-import { theme, pageGradient, getPageGradient } from './themes';
+import { theme, themeDark, pageGradient, getPageGradient } from './themes/sickkids';
 import './App.css';
 
 // Re-export for backward compatibility
@@ -79,53 +80,51 @@ const AdminProtectedRoute = ({ children }) => {
   return children;
 };
 
-function App() {
-  const [themeMode, setThemeMode] = useState('light'); // 'light' or 'dark' (dark not yet implemented)
+function AppContent() {
+  const { themeMode } = useThemeMode();
+  const currentTheme = themeMode === 'dark' ? themeDark : theme;
 
-  // Update document title and favicon
+  return (
+    <ThemeProvider theme={currentTheme}>
+      <CssBaseline />
+      <Router>
+        <div className="App">
+          <Routes>
+            <Route path="/login" element={<AuthPage />} />
+            <Route path="/" element={<ProtectedRoute><Navigate to="/datasets" replace /></ProtectedRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute><><Navbar /><DashboardPage /></></ProtectedRoute>} />
+            <Route path="/datasets" element={<ProtectedRoute><><Navbar /><DatasetsPage /></></ProtectedRoute>} />
+            <Route path="/datasets/:datasetName/patients" element={<ProtectedRoute><><Navbar /><PatientsChartPage /></></ProtectedRoute>} />
+            <Route path="/datasets/:datasetName/patient/:mrn" element={<ProtectedRoute><><Navbar /><SinglePatientPage /></></ProtectedRoute>} />
+            <Route path="/projects" element={<ProtectedRoute><><Navbar /><ProjectsPage /></></ProtectedRoute>} />
+            <Route path="/projects/:projectName" element={<ProtectedRoute><><Navbar /><IndividualProjectPage /></></ProtectedRoute>} />
+            <Route path="/projects/:projectName/dataset/:datasetName/patient/:mrn" element={<ProtectedRoute><><Navbar /><SinglePatientPage /></></ProtectedRoute>} />
+            <Route path="/planning-agent" element={<ProtectedRoute><><Navbar /><PlanningAgentPage /></></ProtectedRoute>} />
+            <Route path="/tool-playground" element={<ProtectedRoute><><Navbar /><ToolkitPlaygroundPage /></></ProtectedRoute>} />
+            <Route path="/caboodle" element={<ProtectedRoute><><Navbar /><CaboodlePage /></></ProtectedRoute>} />
+            <Route path="/account" element={<ProtectedRoute><><Navbar /><AccountPage /></></ProtectedRoute>} />
+            <Route path="/admin" element={<AdminProtectedRoute><><Navbar /><AdminDashboardPage /></></AdminProtectedRoute>} />
+            <Route path="/patients" element={<ProtectedRoute><Navigate to="/datasets" replace /></ProtectedRoute>} />
+            <Route path="*" element={<ProtectedRoute><Navigate to="/datasets" replace /></ProtectedRoute>} />
+          </Routes>
+        </div>
+      </Router>
+    </ThemeProvider>
+  );
+}
+
+function App() {
   useEffect(() => {
     document.title = 'MedAssist - UHN DATA';
     document.querySelector('link[rel="icon"]').href = '/data-favicon-no-background.png';
   }, []);
 
-  // Select theme based on mode (for future dark mode support)
-  // When dark mode is added: const currentTheme = themeMode === 'dark' ? themeDark : theme;
-  const currentTheme = theme;
-
   return (
-    <AuthProvider>
-      <ThemeProvider theme={currentTheme}>
-        <CssBaseline />
-        <Router>
-          <div className="App">
-            <Box sx={{ position: 'fixed', top: 10, right: 10, zIndex: 9999, display: 'none' }}>
-              <Switch
-                checked={themeMode === 'dark'}
-                onChange={() => setThemeMode(themeMode === 'dark' ? 'light' : 'dark')}
-              />
-            </Box>
-            <Routes>
-              <Route path="/login" element={<AuthPage />} />
-              <Route path="/" element={<ProtectedRoute><Navigate to="/datasets" replace /></ProtectedRoute>} />
-              <Route path="/dashboard" element={<ProtectedRoute><><Navbar /><DashboardPage /></></ProtectedRoute>} />
-              <Route path="/datasets" element={<ProtectedRoute><><Navbar /><DatasetsPage /></></ProtectedRoute>} />
-              <Route path="/datasets/:datasetName/patients" element={<ProtectedRoute><><Navbar /><PatientsChartPage /></></ProtectedRoute>} />
-              <Route path="/datasets/:datasetName/patient/:mrn" element={<ProtectedRoute><><Navbar /><SinglePatientPage /></></ProtectedRoute>} />
-              <Route path="/projects" element={<ProtectedRoute><><Navbar /><ProjectsPage /></></ProtectedRoute>} />
-              <Route path="/projects/:projectName" element={<ProtectedRoute><><Navbar /><IndividualProjectPage /></></ProtectedRoute>} />
-              <Route path="/projects/:projectName/dataset/:datasetName/patient/:mrn" element={<ProtectedRoute><><Navbar /><SinglePatientPage /></></ProtectedRoute>} />
-              <Route path="/planning-agent" element={<ProtectedRoute><><Navbar /><PlanningAgentPage /></></ProtectedRoute>} />
-              <Route path="/tool-playground" element={<ProtectedRoute><><Navbar /><ToolPlaygroundPage /></></ProtectedRoute>} />
-              <Route path="/caboodle" element={<ProtectedRoute><><Navbar /><CaboodlePage /></></ProtectedRoute>} />
-              <Route path="/account" element={<ProtectedRoute><><Navbar /><AccountPage /></></ProtectedRoute>} />
-              <Route path="/admin" element={<AdminProtectedRoute><><Navbar /><AdminDashboardPage /></></AdminProtectedRoute>} />
-              <Route path="/patients" element={<ProtectedRoute><Navigate to="/datasets" replace /></ProtectedRoute>} />
-              <Route path="*" element={<ProtectedRoute><Navigate to="/datasets" replace /></ProtectedRoute>} />
-            </Routes>
-          </div>
-        </Router>
-      </ThemeProvider>
-    </AuthProvider>
+    <ThemeModeProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ThemeModeProvider>
   );
 }
 

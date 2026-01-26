@@ -10,6 +10,7 @@ import {
   IconButton,
   Chip
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import {
   Close as CloseIcon,
   Highlight as EvidenceIcon
@@ -81,8 +82,7 @@ const EvidenceNoteViewer = ({ open, onClose, evidenceData }) => {
         <Box sx={{
           mb: 2,
           p: 2,
-          backgroundColor: 'warning.light',
-          opacity: 0.3,
+          backgroundColor: (theme) => alpha(theme.palette.warning.light, 0.3),
           borderLeft: '4px solid',
           borderColor: 'warning.main',
           borderRadius: 1,

@@ -11,7 +11,7 @@ from typing import List, Dict, Any
 
 class GetDiagnosisIds(Tool):
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
     
     @property
@@ -66,7 +66,7 @@ class GetDiagnosisIds(Tool):
 
 class ReadDiagnosis(Tool):
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
     
     @property
@@ -126,7 +126,7 @@ class ReadDiagnosis(Tool):
 
 class HighlightDiagnosis(Tool):
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "SickKids ICU"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property

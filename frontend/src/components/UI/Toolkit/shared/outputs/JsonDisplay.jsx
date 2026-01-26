@@ -32,7 +32,7 @@ function JsonDisplay({
         variant="outlined"
         sx={{
           p: 2,
-          backgroundColor: 'grey.50',
+          backgroundColor: 'custom.neutralBackground',
           overflow: 'auto',
           maxHeight: 400
         }}

@@ -279,7 +279,7 @@ const ProjectAnnotationsTab = ({ project }) => {
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
-              <TableRow sx={{ backgroundColor: 'grey.50' }}>
+              <TableRow sx={{ backgroundColor: 'action.hover' }}>
                 <TableCell><strong>Name</strong></TableCell>
                 <TableCell><strong>Source</strong></TableCell>
                 <TableCell><strong>Fields</strong></TableCell>

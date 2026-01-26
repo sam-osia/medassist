@@ -37,7 +37,7 @@ function SpanReasoning({
       <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
         {/* Span Section */}
         {span && (
-          <Box sx={{ p: 2, backgroundColor: 'grey.50' }}>
+          <Box sx={{ p: 2, backgroundColor: 'custom.neutralBackground' }}>
             <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
               <QuoteIcon sx={{ color: 'text.secondary', fontSize: 20, mt: 0.5 }} />
               <Box>

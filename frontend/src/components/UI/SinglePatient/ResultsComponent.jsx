@@ -19,6 +19,7 @@ import {
   Select,
   MenuItem
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import {
   Assessment as ResultsIcon,
   CheckCircle as CheckIcon,
@@ -30,6 +31,7 @@ import {
 } from '@mui/icons-material';
 import EvidenceNoteViewer from './EvidenceNoteViewer';
 import { workflowService } from '../../../services/ApiService';
+import { groupResultsByFlag } from '../../../utils/workflowResultsUtils';
 
 // Helper to format date/time consistently
 const formatDateTime = (dateString) => {
@@ -51,7 +53,7 @@ const preventChipInteraction = (event) => {
 // Evidence row components that replicate the table structures from other components
 const DiagnosisEvidenceRow = ({ diagnosis }) => {
   return (
-    <TableRow sx={{ backgroundColor: 'warning.light', opacity: 0.3, '&:hover': { backgroundColor: 'warning.main', opacity: 0.4 } }}>
+    <TableRow sx={{ backgroundColor: (theme) => alpha(theme.palette.warning.light, 0.3), '&:hover': { backgroundColor: (theme) => alpha(theme.palette.warning.main, 0.4) } }}>
       <TableCell>{diagnosis.diagnosis_id || 'N/A'}</TableCell>
       <TableCell>
         <Typography variant="body2" sx={{ maxWidth: 200 }}>
@@ -83,7 +85,7 @@ const DiagnosisEvidenceRow = ({ diagnosis }) => {
 const MedicationEvidenceRow = ({ medication }) => {
 
   return (
-    <TableRow sx={{ backgroundColor: 'warning.light', opacity: 0.3, '&:hover': { backgroundColor: 'warning.main', opacity: 0.4 } }}>
+    <TableRow sx={{ backgroundColor: (theme) => alpha(theme.palette.warning.light, 0.3), '&:hover': { backgroundColor: (theme) => alpha(theme.palette.warning.main, 0.4) } }}>
       <TableCell>{medication.order_id || 'N/A'}</TableCell>
       <TableCell>
         <Typography variant="body2" sx={{ maxWidth: 200 }}>
@@ -129,9 +131,9 @@ const MedicationEvidenceRow = ({ medication }) => {
 
 const NoteEvidenceRow = ({ evidenceSource, onViewEvidence }) => {
   const note = evidenceSource.details;
-  
+
   return (
-    <TableRow sx={{ backgroundColor: 'warning.light', opacity: 0.3, '&:hover': { backgroundColor: 'warning.main', opacity: 0.4 } }}>
+    <TableRow sx={{ backgroundColor: (theme) => alpha(theme.palette.warning.light, 0.3), '&:hover': { backgroundColor: (theme) => alpha(theme.palette.warning.main, 0.4) } }}>
       <TableCell>{note.note_id || 'N/A'}</TableCell>
       <TableCell>
         <Typography variant="body2">
@@ -159,8 +161,7 @@ const NoteEvidenceRow = ({ evidenceSource, onViewEvidence }) => {
             color: 'warning.dark',
             borderColor: 'warning.main',
             '&:hover': {
-              backgroundColor: 'warning.light',
-              opacity: 0.3,
+              backgroundColor: (theme) => alpha(theme.palette.warning.light, 0.3),
               borderColor: 'warning.main'
             }
           }}
@@ -182,7 +183,7 @@ const FlowsheetEvidenceRow = ({ flowsheetData }) => {
   );
 
   return (
-    <TableRow sx={{ backgroundColor: 'warning.light', opacity: 0.3, '&:hover': { backgroundColor: 'warning.main', opacity: 0.4 } }}>
+    <TableRow sx={{ backgroundColor: (theme) => alpha(theme.palette.warning.light, 0.3), '&:hover': { backgroundColor: (theme) => alpha(theme.palette.warning.main, 0.4) } }}>
       <TableCell>
         <Typography variant="body2">
           {formatDateTime(instance.timestamp)}
@@ -331,10 +332,10 @@ const FlagRow = ({ flagName, flagData, onViewEvidence }) => {
 
   return (
     <>
-      <TableRow sx={{ 
-        '& > *': { borderBottom: '1px solid rgba(0, 0, 0, 0.08)' },
-        backgroundColor: isPositive ? 'rgba(255, 152, 0, 0.08)' : 'transparent',
-        '&:hover': { backgroundColor: isPositive ? 'rgba(255, 152, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)' }
+      <TableRow sx={{
+        '& > *': { borderBottom: (theme) => `1px solid ${theme.palette.custom.subtleBorder}` },
+        backgroundColor: isPositive ? 'custom.warningBackground' : 'transparent',
+        '&:hover': { backgroundColor: isPositive ? 'custom.warningHover' : 'custom.tableRowHover' }
       }}>
         <TableCell>
           <IconButton
@@ -445,35 +446,31 @@ const ResultsComponent = ({ workflowResults, mrn, csn, patientExperiments = [], 
     try {
       const response = await workflowService.getExperimentDetails(experimentName);
       const experiment = response.data;
-      
-      // Find this patient's results in the experiment
-      const patientData = experiment.results?.patients?.find(
-        patient => patient.mrn.toString() === mrn.toString()
+      const resultsData = experiment.results || {};
+
+      const outputValues = resultsData.output_values || [];
+      const outputDefinitions = resultsData.output_definitions || [];
+
+      // Filter values for this patient/encounter
+      const patientValues = outputValues.filter(
+        v => String(v.metadata?.patient_id) === String(mrn) &&
+             String(v.metadata?.encounter_id) === String(csn)
       );
-      
-      if (patientData) {
-        // Find the encounter that matches the CSN
-        const encounterData = patientData.encounters?.find(
-          encounter => encounter.csn.toString() === csn.toString()
-        );
-        
-        if (encounterData) {
-          // Format the results to match the expected structure
-          setExperimentResults({
-            mrn: patientData.mrn,
-            csn: encounterData.csn,
-            flags: encounterData.flags,
-            workflow_type: 'delirium_screening',
-            completed_time: experiment.metadata?.created_date || new Date().toISOString(),
-            experiment_name: experimentName,
-            experiment_metadata: experiment.metadata
-          });
-        } else {
-          console.warn('No encounter data found for CSN:', csn);
-          setExperimentResults(null);
-        }
+
+      if (patientValues.length > 0 || outputDefinitions.length > 0) {
+        // Set experiment results with full structure for groupResultsByFlag
+        setExperimentResults({
+          mrn: mrn,
+          csn: csn,
+          output_definitions: outputDefinitions,
+          output_values: patientValues,
+          workflow_type: experiment.metadata?.workflow_name || 'unknown',
+          completed_time: experiment.metadata?.created_date || new Date().toISOString(),
+          experiment_name: experimentName,
+          experiment_metadata: experiment.metadata
+        });
       } else {
-        console.warn('No patient data found for MRN:', mrn);
+        console.warn('No results found for MRN/CSN:', mrn, csn);
         setExperimentResults(null);
       }
     } catch (error) {
@@ -492,7 +489,12 @@ const ResultsComponent = ({ workflowResults, mrn, csn, patientExperiments = [], 
     setSelectedEvidence(null);
   };
   
-  if (!displayedResults || !displayedResults.flags) {
+  // Check if results exist
+  const hasResults = displayedResults && (
+    displayedResults.output_definitions ||
+    displayedResults.output_values
+  );
+  if (!hasResults) {
     return (
       <Box>
         {/* Header */}
@@ -570,14 +572,16 @@ const ResultsComponent = ({ workflowResults, mrn, csn, patientExperiments = [], 
     );
   }
 
-  const flags = displayedResults.flags;
+  // Convert results to grouped flags format for display
+  const flags = groupResultsByFlag(displayedResults, mrn, csn);
+
   const workflowType = displayedResults.workflow_type || 'Unknown';
   const completedTime = displayedResults.completed_time || new Date().toISOString();
   const experimentName = displayedResults.experiment_name;
-  
+
   // Filter out threshold values and get all flags
   const flagEntries = Object.entries(flags).filter(([key]) => !key.endsWith('_threshold'));
-  
+
   // Count positive flags
   const positiveFlags = flagEntries.filter(([key, flagData]) => flagData.state).length;
   const totalFlags = flagEntries.length;
@@ -650,9 +654,9 @@ const ResultsComponent = ({ workflowResults, mrn, csn, patientExperiments = [], 
           </Typography>
         </Box>
       ) : (
-        <TableContainer component={Paper} elevation={0} sx={{ 
-          borderRadius: 2, 
-          border: '1px solid rgba(0, 0, 0, 0.12)'
+        <TableContainer component={Paper} elevation={0} sx={{
+          borderRadius: 2,
+          border: (theme) => `1px solid ${theme.palette.custom.mediumBorder}`
         }}>
           <Table aria-label="workflow flags table">
             <TableHead>

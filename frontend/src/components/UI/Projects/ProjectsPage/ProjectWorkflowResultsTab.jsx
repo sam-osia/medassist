@@ -525,7 +525,7 @@ const ProjectWorkflowResultsTab = ({ project }) => {
             )}
 
             {!patientsLoading && !patientsError && patients.length > 0 && (
-              <Box sx={{ maxHeight: '300px', overflow: 'auto', border: '1px solid #e0e0e0', borderRadius: 1 }}>
+              <Box sx={{ maxHeight: '300px', overflow: 'auto', border: (theme) => `1px solid ${theme.palette.divider}`, borderRadius: 1 }}>
                 <PatientSelectionTable
                   patients={patients}
                   selectedMRNs={selectedMRNs}

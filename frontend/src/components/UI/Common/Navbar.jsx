@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { AppBar, Toolbar, Box, Typography, Button, IconButton, Menu, MenuItem } from '@mui/material';
+import { AppBar, Toolbar, Box, Typography, Button, IconButton, Menu, MenuItem, Switch } from '@mui/material';
 import { AccountCircle } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
 import { useAuth } from '../../../contexts/AuthProvider';
+import { useThemeMode } from '../../../contexts/ThemeProvider';
 
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
   const { logout, isAdmin } = useAuth();
+  const { isDark, toggleTheme } = useThemeMode();
   const [anchorEl, setAnchorEl] = useState(null);
 
   const menuItems = [
@@ -115,6 +117,20 @@ const Navbar = () => {
               horizontal: 'right',
             }}
           >
+            <MenuItem
+              onClick={(e) => { e.stopPropagation(); toggleTheme(); }}
+              sx={{ color: theme.palette.primary.main }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                Dark Mode
+                <Switch
+                  checked={isDark}
+                  size="small"
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={toggleTheme}
+                />
+              </Box>
+            </MenuItem>
             <MenuItem onClick={handleAccountClick} sx={{ color: theme.palette.primary.main }}>My Account</MenuItem>
             {isAdmin && <MenuItem onClick={handleAdminClick} sx={{ color: theme.palette.primary.main }}>Admin Dashboard</MenuItem>}
             <MenuItem onClick={handleLogout} sx={{ color: theme.palette.primary.main }}>Logout</MenuItem>

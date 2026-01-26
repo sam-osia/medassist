@@ -1,9 +1,12 @@
 """Generator agent - creates new workflows from scratch."""
 
 import json
+import logging
 from pathlib import Path
 
 from core.llm_provider import call
+
+logger = logging.getLogger("workflow.agents")
 from core.workflow.schemas.plan_schema import Plan as Workflow
 
 from .base import BaseAgent
@@ -42,6 +45,8 @@ Output a valid workflow JSON that follows the Plan schema."""
 
     def run(self, inputs: GeneratorInput) -> GeneratorOutput:
         """Generate a new workflow from task description."""
+        logger.info(f"[{self.name}] called")
+        logger.debug(f"[{self.name}] task: {inputs.task_description}")
         try:
             # Build the system prompt with tool specs
             tool_specs_str = json.dumps(inputs.tool_specs, indent=2)
@@ -70,17 +75,20 @@ Remember: Set prompt fields to null for tools that need them - they will be fill
             )
 
             if result.parsed:
+                logger.info(f"[{self.name}] success - generated {len(result.parsed.steps)} steps")
                 return GeneratorOutput(
                     workflow=result.parsed,
                     success=True
                 )
             else:
+                logger.warning(f"[{self.name}] failed to parse workflow from LLM response")
                 return GeneratorOutput(
                     success=False,
                     error_message="Failed to parse workflow from LLM response"
                 )
 
         except Exception as e:
+            logger.error(f"[{self.name}] error: {e}")
             return GeneratorOutput(
                 success=False,
                 error_message=str(e)

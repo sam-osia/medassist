@@ -12,7 +12,6 @@ import BrandingFooter from '../components/UI/Common/BrandingFooter';
 import DatasetTable from '../components/UI/Datasets/DatasetTable';
 import BreadcrumbNav from '../components/UI/Common/BreadcrumbNav';
 import { datasetsService } from '../services/ApiService';
-import { getPageGradient } from '../App';
 
 const PatientsChartPage = () => {
   const theme = useTheme();
@@ -52,7 +51,7 @@ const PatientsChartPage = () => {
     return (
       <Box sx={{ 
         minHeight: '100vh',
-        background: getPageGradient(theme),
+        background: theme.pageGradient,
         py: 4
       }}>
         <Container maxWidth="lg" sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
@@ -71,7 +70,7 @@ const PatientsChartPage = () => {
     return (
       <Box sx={{ 
         minHeight: '100vh',
-        background: getPageGradient(theme),
+        background: theme.pageGradient,
         py: 4
       }}>
         <Container maxWidth="lg" sx={{ mt: 4 }}>
@@ -91,7 +90,7 @@ const PatientsChartPage = () => {
   return (
     <Box sx={{
       minHeight: '100vh',
-      background: getPageGradient(theme),
+      background: theme.pageGradient,
       py: 4
     }}>
       <Container maxWidth="lg" sx={{ mt: 0, mb: 4 }}>

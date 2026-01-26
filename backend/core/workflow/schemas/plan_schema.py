@@ -71,13 +71,13 @@ class LoopStep(BaseStep):
     body: List[AdvancedSteps]
     output_dict: Optional[str] = None
 
-class FlagVariableStep(BaseStep):
-    type: Literal["flag_variable"] = "flag_variable"
-    variable: str
-    value: bool
+# class FlagVariableStep(BaseStep):
+#     type: Literal["flag_variable"] = "flag_variable"
+#     variable: str
+#     value: bool
 
 # Discriminated‑union with the "type" field
-AllSteps = Union[ToolStep, IfStep, LoopStep, FlagVariableStep]
+AllSteps = Union[ToolStep, IfStep, LoopStep]
 
 # ---------- The Plan ----------
 class Plan(BaseModel):

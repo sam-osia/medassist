@@ -50,46 +50,70 @@ def create_experiment_folder(experiment_name: str, project_name: str, workflow_n
     with open(metadata_path, 'w') as f:
         json.dump(metadata, f, indent=2)
 
-    # Initialize empty results file
+    # Initialize empty results file with new structure
     results_path = os.path.join(experiment_dir, "results.json")
     with open(results_path, 'w') as f:
-        json.dump({"patients": []}, f, indent=2)
+        json.dump({"output_definitions": [], "output_values": []}, f, indent=2)
 
     logger.info(f"Created experiment folder: {experiment_name}")
     return experiment_dir
 
 
 def append_patient_result(experiment_name: str, patient_result: Dict[str, Any]):
-    """Append a patient's results to the experiment and update metadata."""
+    """
+    Append a patient's results to the experiment and update metadata.
+
+    Args:
+        experiment_name: Name of the experiment
+        patient_result: Dict containing {mrn, csn, output_definitions, output_values}
+    """
     experiment_dir = os.path.join(EXPERIMENTS_DIR, experiment_name)
     results_path = os.path.join(experiment_dir, "results.json")
     metadata_path = os.path.join(experiment_dir, "metadata.json")
 
     # Read current results
     with open(results_path, 'r') as f:
-        results = json.load(f)
+        data = json.load(f)
 
-    # Append new patient
-    results["patients"].append(patient_result)
+    # Merge definitions (dedupe by id)
+    new_definitions = patient_result.get("output_definitions", [])
+    existing_def_ids = {d["id"] for d in data.get("output_definitions", [])}
+    for new_def in new_definitions:
+        if new_def["id"] not in existing_def_ids:
+            data.setdefault("output_definitions", []).append(new_def)
+            existing_def_ids.add(new_def["id"])
+
+    # Append output values
+    new_values = patient_result.get("output_values", [])
+    data.setdefault("output_values", []).extend(new_values)
 
     # Write updated results
     with open(results_path, 'w') as f:
-        json.dump(results, f, indent=2)
+        json.dump(data, f, indent=2)
 
     # Update metadata counts
     with open(metadata_path, 'r') as f:
         metadata = json.load(f)
 
-    metadata["total_patients"] = len(results["patients"])
-    metadata["total_encounters"] = sum(
-        len(p.get("encounters", [])) for p in results["patients"]
-    )
+    # Count unique patients and encounters from output values metadata
+    patients_seen = set()
+    encounters_seen = set()
+    for v in data.get("output_values", []):
+        patient_id = v.get("metadata", {}).get("patient_id", "")
+        encounter_id = v.get("metadata", {}).get("encounter_id", "")
+        if patient_id:
+            patients_seen.add(str(patient_id))
+        if patient_id and encounter_id:
+            encounters_seen.add((str(patient_id), str(encounter_id)))
+
+    metadata["total_patients"] = len(patients_seen)
+    metadata["total_encounters"] = len(encounters_seen)
     metadata["last_modified_date"] = datetime.datetime.now().isoformat()
 
     with open(metadata_path, 'w') as f:
         json.dump(metadata, f, indent=2)
 
-    logger.info(f"Appended patient {patient_result.get('mrn')} to experiment {experiment_name}")
+    logger.info(f"Appended {len(new_values)} values for patient {patient_result.get('mrn')} to experiment {experiment_name}")
 
 
 def create_status_file(experiment_name: str, total_patients: int):
@@ -428,24 +452,14 @@ def _process_experiment_in_background(
                 # Run workflow on this patient's first encounter
                 result = run_workflow_sdoh(mrn, csn, prompts)
 
-                # Structure result for storage
-                patient_result = {
-                    "mrn": mrn,
-                    "encounters": [
-                        {
-                            "csn": csn,
-                            "flags": result.get("flags", {})
-                        }
-                    ]
-                }
+                # Result now contains: {mrn, csn, output_definitions, output_values}
+                patient_result = result
 
-                # Count flags
-                flags = result.get("flags", {})
+                # Count detected flags from output values
+                output_values = result.get("output_values", [])
                 flags_detected = sum(
-                    1 for flag_name, flag_data in flags.items()
-                    if not flag_name.endswith('_threshold')
-                    and isinstance(flag_data, dict)
-                    and flag_data.get('state') is True
+                    1 for v in output_values
+                    if v.get("values", {}).get("detected") is True
                 )
                 total_flags += flags_detected
 

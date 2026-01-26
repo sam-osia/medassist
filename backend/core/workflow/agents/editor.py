@@ -1,9 +1,12 @@
 """Editor agent - modifies existing workflows."""
 
 import json
+import logging
 from pathlib import Path
 
 from core.llm_provider import call
+
+logger = logging.getLogger("workflow.agents")
 from core.workflow.schemas.plan_schema import Plan as Workflow
 
 from .base import BaseAgent
@@ -42,6 +45,8 @@ Output the modified workflow as valid JSON."""
 
     def run(self, inputs: EditorInput) -> EditorOutput:
         """Edit an existing workflow based on the edit request."""
+        logger.info(f"[{self.name}] called")
+        logger.debug(f"[{self.name}] edit_request: {inputs.edit_request}")
         try:
             # Serialize current workflow
             current_workflow_str = inputs.current_workflow.model_dump_json(indent=2)
@@ -71,17 +76,20 @@ IMPORTANT: Preserve prompt values for unchanged steps!"""
             )
 
             if result.parsed:
+                logger.info(f"[{self.name}] success - edited workflow has {len(result.parsed.steps)} steps")
                 return EditorOutput(
                     workflow=result.parsed,
                     success=True
                 )
             else:
+                logger.warning(f"[{self.name}] failed to parse edited workflow from LLM response")
                 return EditorOutput(
                     success=False,
                     error_message="Failed to parse edited workflow from LLM response"
                 )
 
         except Exception as e:
+            logger.error(f"[{self.name}] error: {e}")
             return EditorOutput(
                 success=False,
                 error_message=str(e)

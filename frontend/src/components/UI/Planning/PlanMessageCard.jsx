@@ -27,7 +27,7 @@ const PlanMessageCard = ({
           transition: 'all 0.2s ease-in-out',
           border: isSelected ? 2 : 1,
           borderColor: isSelected ? 'success.main' : 'divider',
-          backgroundColor: isSelected ? 'success.light' : 'grey.200',
+          backgroundColor: isSelected ? 'success.light' : 'custom.alternateRow',
           '&:hover': {
             borderColor: isSelected ? 'success.dark' : 'primary.main',
             transform: 'translateY(-1px)',

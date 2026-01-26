@@ -1,7 +1,10 @@
 """Clarifier agent - asks clarifying questions when request is ambiguous."""
 
 import json
+import logging
 from pathlib import Path
+
+logger = logging.getLogger("workflow.agents")
 
 from pydantic import BaseModel
 from typing import List
@@ -55,6 +58,8 @@ Guidelines:
 
     def run(self, inputs: ClarifierInput) -> ClarifierOutput:
         """Analyze request and determine if clarification is needed."""
+        logger.info(f"[{self.name}] called")
+        logger.debug(f"[{self.name}] user_request: {inputs.user_request}")
         try:
             tool_specs_str = json.dumps(inputs.tool_specs, indent=2)
 
@@ -86,6 +91,7 @@ Analyze whether the user's request is clear and achievable."""
             )
 
             if result.parsed:
+                logger.info(f"[{self.name}] ready={result.parsed.ready}, questions={len(result.parsed.questions)}, out_of_scope={result.parsed.out_of_scope}")
                 return ClarifierOutput(
                     ready=result.parsed.ready,
                     questions=result.parsed.questions,
@@ -94,8 +100,10 @@ Analyze whether the user's request is clear and achievable."""
                 )
             else:
                 # Assume ready if parsing fails
+                logger.warning(f"[{self.name}] parsing failed, assuming ready=True")
                 return ClarifierOutput(ready=True)
 
-        except Exception:
+        except Exception as e:
             # Assume ready on error to not block
+            logger.error(f"[{self.name}] error: {e}, assuming ready=True")
             return ClarifierOutput(ready=True)

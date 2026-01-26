@@ -84,7 +84,7 @@ const EncounterCard = ({
     <Card
       variant="outlined"
       sx={{
-        border: '1px solid #e0e0e0',
+        border: (theme) => `1px solid ${theme.palette.divider}`,
         '&:hover': {
           boxShadow: 1,
           borderColor: 'primary.main'

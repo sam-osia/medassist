@@ -5,7 +5,7 @@ import { PlaylistAddCheck as ProcessIcon } from '@mui/icons-material';
 const ProcessComponent = () => {
   return (
     <Box sx={{
-      backgroundColor: 'white',
+      backgroundColor: 'background.paper',
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
