@@ -18,13 +18,21 @@ class GetPatientNotesIds(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
-    
+
     @property
     def name(self) -> str:
         return "get_patient_notes_ids"
-    
+
     @property
     def description(self) -> str:
+        return "Return a list of note IDs for a given patient MRN and CSN encounter."
+
+    @property
+    def display_name(self) -> str:
+        return "Get Patient Notes IDs"
+
+    @property
+    def user_description(self) -> str:
         return "Return a list of note IDs for a given patient MRN and CSN encounter."
 
     @property
@@ -72,15 +80,23 @@ class ReadPatientNote(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
-    
+
     @property
     def name(self) -> str:
         return "read_patient_note"
-    
+
     @property
     def description(self) -> str:
         return "Return details about a specific patient note as a JSON string."
-    
+
+    @property
+    def display_name(self) -> str:
+        return "Read Patient Note"
+
+    @property
+    def user_description(self) -> str:
+        return "Return details about a specific patient note as a JSON string."
+
     @property
     def category(self) -> str:
         return "notes"
@@ -131,15 +147,23 @@ class SummarizePatientNote(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
-    
+
     @property
     def name(self) -> str:
         return "summarize_patient_note"
-    
+
     @property
     def description(self) -> str:
         return "Analyze and summarize a patient note based on a given criteria"
-    
+
+    @property
+    def display_name(self) -> str:
+        return "Summarize Patient Note"
+
+    @property
+    def user_description(self) -> str:
+        return "Analyze and summarize a patient note based on a given criteria"
+
     @property
     def category(self) -> str:
         return "notes"
@@ -205,15 +229,29 @@ class HighlightPatientNote(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
-    
+
     @property
     def name(self) -> str:
         return "highlight_patient_note"
-    
+
     @property
     def description(self) -> str:
         return "Analyze a patient note and highlight portions relevant to specific criteria using <highlight></highlight> tags."
-    
+
+    @property
+    def display_name(self) -> str:
+        return "Highlight Patient Note"
+
+    @property
+    def user_description(self) -> str:
+        return "Analyze a patient note and highlight portions relevant to specific criteria using <highlight></highlight> tags."
+
+    @property
+    def input_help(self) -> Dict[str, str]:
+        return {
+            "prompt": "Configure the system and user prompts. Use Jinja2 template variables like {{note}} and {{criteria}} to reference input fields."
+        }
+
     @property
     def category(self) -> str:
         return "notes"
@@ -311,6 +349,20 @@ class AnalyzeNoteWithSpanAndReason:
     @property
     def description(self) -> str:
         return "Analyze a patient note and highlight portions relevant to specific criteria using <highlight></highlight> tags."
+
+    @property
+    def display_name(self) -> str:
+        return "Analyze Note With Span And Reason"
+
+    @property
+    def user_description(self) -> str:
+        return "Analyze a patient note and highlight portions relevant to specific criteria using <highlight></highlight> tags."
+
+    @property
+    def input_help(self) -> Dict[str, str]:
+        return {
+            "prompt": "Configure the system and user prompts. Use Jinja2 template variables like {{note}} to reference input fields."
+        }
 
     @property
     def category(self) -> str:
@@ -423,15 +475,23 @@ class KeywordCount(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
-    
+
     @property
     def name(self) -> str:
         return "keyword_count"
-    
+
     @property
     def description(self) -> str:
         return "Use LLM to analyze text and count keywords, returning structured output with counts and formatted text."
-    
+
+    @property
+    def display_name(self) -> str:
+        return "Keyword Count"
+
+    @property
+    def user_description(self) -> str:
+        return "Use LLM to analyze text and count keywords, returning structured output with counts and formatted text."
+
     @property
     def category(self) -> str:
         return "notes"
@@ -544,15 +604,23 @@ class IdentifyFlag(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
-    
+
     @property
     def name(self) -> str:
         return "identify_flag"
-    
+
     @property
     def description(self) -> str:
         return "Analyze text to identify if specific flag criteria are met, returning boolean result and highlighted text if flag is raised."
-    
+
+    @property
+    def display_name(self) -> str:
+        return "Identify Flag"
+
+    @property
+    def user_description(self) -> str:
+        return "Analyze text to identify if specific flag criteria are met, returning boolean result and highlighted text if flag is raised."
+
     @property
     def category(self) -> str:
         return "notes"

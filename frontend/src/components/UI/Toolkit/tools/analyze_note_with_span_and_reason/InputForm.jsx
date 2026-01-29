@@ -15,7 +15,8 @@ function InputForm({
   onChange,
   errors = {},
   disabled = false,
-  outputSchema = null
+  outputSchema = null,
+  inputHelp = {}
 }) {
   const handleFieldChange = (fieldName, newValue) => {
     onChange({
@@ -52,6 +53,7 @@ function InputForm({
             disabled={disabled}
             availableVariables={availableVariables}
             outputSchema={outputSchema}
+            helpText={inputHelp.prompt}
           />
         </Grid>
       </Grid>

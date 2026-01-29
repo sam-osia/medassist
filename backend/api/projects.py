@@ -110,7 +110,8 @@ def create_project(data: Dict[str, Any] = Body(...), current_user: str = Depends
             "description": data.get("description", ""),
             "contacts": contacts,
             "references": data.get("references", []),
-            "dataset": data.get("dataset")
+            "dataset": data.get("dataset"),
+            "allowed_users": data.get("allowed_users", [])
         }
 
         # Save project with current_user as owner

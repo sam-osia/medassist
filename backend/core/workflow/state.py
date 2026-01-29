@@ -38,6 +38,9 @@ class WorkflowAgentState:
     pending_workflow: Optional[Workflow] = None  # Workflow being built/modified
     pending_summary: Optional[str] = None
 
+    # Agent call log for current process_message run
+    agent_call_log: List[Dict[str, Any]] = field(default_factory=list)
+
     def get_current_workflow(self) -> Optional[Workflow]:
         """Get the current active workflow."""
         if self.current_workflow_id:
@@ -77,3 +80,4 @@ class WorkflowAgentState:
         self.pending_summary = None
         self.last_agent = None
         self.last_agent_result = None
+        self.agent_call_log = []

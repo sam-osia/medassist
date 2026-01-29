@@ -14,15 +14,23 @@ class ReadFlowsheetsTable(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
-    
+
     @property
     def name(self) -> str:
         return "read_flowsheets_table"
-    
+
     @property
     def description(self) -> str:
         return "Read the table of flowsheets for a given patient MRN and CSN encounter."
-    
+
+    @property
+    def display_name(self) -> str:
+        return "Read Flowsheets Table"
+
+    @property
+    def user_description(self) -> str:
+        return "Read the table of flowsheets for a given patient MRN and CSN encounter."
+
     @property
     def category(self) -> str:
         return "flowsheets"
@@ -66,15 +74,23 @@ class SummarizeFlowsheetsTable(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
-    
+
     @property
     def name(self) -> str:
         return "summarize_flowsheets_table"
-    
+
     @property
     def description(self) -> str:
         return "Summarize the table of flowsheets in a clear and concise manner."
-    
+
+    @property
+    def display_name(self) -> str:
+        return "Summarize Flowsheets Table"
+
+    @property
+    def user_description(self) -> str:
+        return "Summarize the table of flowsheets in a clear and concise manner."
+
     @property
     def category(self) -> str:
         return "flowsheets"
@@ -125,15 +141,23 @@ class AnalyzeFlowsheetInstance(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
-    
+
     @property
     def name(self) -> str:
         return "analyze_flowsheet_instance"
-    
+
     @property
     def description(self) -> str:
         return "Analyze a single flowsheet instance for CAPD score threshold comparison based on patient conditions."
-    
+
+    @property
+    def display_name(self) -> str:
+        return "Analyze Flowsheet Instance"
+
+    @property
+    def user_description(self) -> str:
+        return "Analyze a single flowsheet instance for CAPD score threshold comparison based on patient conditions."
+
     @property
     def category(self) -> str:
         return "flowsheets"

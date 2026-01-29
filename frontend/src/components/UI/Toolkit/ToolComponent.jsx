@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+    import React, { useEffect, useState } from 'react';
 import {
   Box,
   Typography,
@@ -156,7 +156,7 @@ function validateValues(values, schema) {
  * Uses the registry to get appropriate InputForm and OutputView components.
  */
 const ToolComponent = ({ tool }) => {
-  const { name, category, description, input_schema: schema, output_schema } = tool;
+  const { name, display_name, category, description, user_description, input_schema: schema, output_schema, input_help } = tool;
 
   const [values, setValues] = useState({});
   const [errors, setErrors] = useState({});
@@ -232,16 +232,11 @@ const ToolComponent = ({ tool }) => {
       {/* Header */}
       <Box sx={{ mb: 2 }}>
         <Typography variant="h6" sx={{ fontWeight: 700 }}>
-          {name}
+          {display_name || name}
         </Typography>
-        {category && (
-          <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
-            {category}
-          </Typography>
-        )}
-        {description && (
+        {(user_description || description) && (
           <Typography variant="body2" color="text.secondary">
-            {description}
+            {user_description || description}
           </Typography>
         )}
       </Box>
@@ -254,6 +249,7 @@ const ToolComponent = ({ tool }) => {
         errors={errors}
         disabled={running}
         outputSchema={output_schema}
+        inputHelp={input_help || {}}
       />
 
       {/* Run Button */}

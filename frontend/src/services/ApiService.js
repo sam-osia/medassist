@@ -309,13 +309,23 @@ export const annotationsService = {
 
 // New workflow agent service (multi-agent system)
 export const workflowAgentService = {
-    // Process a message through the workflow agent
-    processMessage: (message, conversationId = null, mrn = 0, csn = 0, dataset = null) =>
-        ApiService.post('/workflow-agent/message', {
-            message,
-            conversation_id: conversationId,
-            mrn,
-            csn,
-            dataset
-        }),
+    // Process a message through the workflow agent with streaming trace events
+    processMessageStream: (message, conversationId = null, mrn = 0, csn = 0, dataset = null) => {
+        const token = localStorage.getItem('accessToken');
+
+        return fetch(`${ApiService.defaults.baseURL}/workflow-agent/message`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            },
+            body: JSON.stringify({
+                message,
+                conversation_id: conversationId,
+                mrn,
+                csn,
+                dataset
+            })
+        });
+    }
 };

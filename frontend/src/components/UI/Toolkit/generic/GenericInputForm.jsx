@@ -88,7 +88,8 @@ function GenericInputForm({
   onChange,
   errors = {},
   disabled = false,
-  outputSchema = null
+  outputSchema = null,
+  inputHelp = {}
 }) {
   // Handle no schema
   if (!schema || !schema.properties) {
@@ -138,7 +139,8 @@ function GenericInputForm({
           const extraProps = InputComponent === PromptInput
             ? {
                 availableVariables: getAvailableVariables(fieldName),
-                outputSchema: outputSchema
+                outputSchema: outputSchema,
+                helpText: inputHelp[fieldName]
               }
             : {};
 

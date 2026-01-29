@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
 import { useAuth } from '../../../contexts/AuthProvider';
 import { useThemeMode } from '../../../contexts/ThemeProvider';
+import sickkidsLogo from '../../../assets/logos/sickkids_logo.png';
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -50,22 +51,31 @@ const Navbar = () => {
   return (
     <AppBar position="static" sx={{ backgroundColor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider' }} elevation={1}>
       <Toolbar sx={{ display: 'flex', alignItems: 'center' }}>
-        <Typography
-          variant="h5"
-          component="div"
-          sx={{
-            color: 'text.primary',
-            fontWeight: 'bold',
-            fontFamily: 'Syncopate, monospace',
-            cursor: 'pointer'
-          }}
-          onClick={() => navigate('/datasets')}
-        >
-          MedAssist AI
-        </Typography>
+        {/* Left section */}
+        <Box sx={{ flex: 1 }}>
+          <Typography
+            variant="h5"
+            component="div"
+            sx={{
+              color: 'text.primary',
+              fontWeight: 'bold',
+              fontFamily: 'Syncopate, monospace',
+              cursor: 'pointer',
+              display: 'inline-block'
+            }}
+            onClick={() => navigate('/datasets')}
+          >
+            MedAssist AI
+          </Typography>
+        </Box>
+
+        {/* Center section - Logo */}
+        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+          <img src={sickkidsLogo} alt="SickKids" style={{ height: 40 }} />
+        </Box>
 
         {/* Right section - Navigation links */}
-        <Box sx={{ display: 'flex', gap: 2, marginLeft: 'auto', alignItems: 'center' }}>
+        <Box sx={{ flex: 1, display: 'flex', gap: 2, justifyContent: 'flex-end', alignItems: 'center' }}>
           {menuItems.map((item) => (
             <Button
               key={item.text}

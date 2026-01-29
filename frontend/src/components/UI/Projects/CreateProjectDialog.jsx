@@ -16,8 +16,8 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Checkbox,
-  FormControlLabel
+  Autocomplete,
+  Chip
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
@@ -391,41 +391,29 @@ const CreateProjectDialog = ({ mode = 'create', initialProject = null, open, onC
           <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
             Project Members (Optional)
           </Typography>
-          <Box sx={{
-            maxHeight: 200,
-            overflowY: 'auto',
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            p: 1
-          }}>
-            {users.filter(user => user.username !== username).length === 0 ? (
-              <Typography variant="body2" color="text.secondary" sx={{ p: 1 }}>
-                No other users available
-              </Typography>
-            ) : (
-              users
-                .filter(user => user.username !== username)
-                .map((user) => (
-                  <FormControlLabel
-                    key={user.username}
-                    control={
-                      <Checkbox
-                        checked={selectedMembers.includes(user.username)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedMembers([...selectedMembers, user.username]);
-                          } else {
-                            setSelectedMembers(selectedMembers.filter(u => u !== user.username));
-                          }
-                        }}
-                      />
-                    }
-                    label={user.username}
-                  />
-                ))
+          <Autocomplete
+            multiple
+            options={users.filter(user => user.username !== username).map(u => u.username)}
+            value={selectedMembers}
+            onChange={(event, newValue) => setSelectedMembers(newValue)}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => (
+                <Chip
+                  label={option}
+                  {...getTagProps({ index })}
+                  key={option}
+                />
+              ))
+            }
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                placeholder={selectedMembers.length === 0 ? "Search users..." : ""}
+                size="small"
+              />
             )}
-          </Box>
+            noOptionsText="No users available"
+          />
         </Box>
       </DialogContent>
 

@@ -18,13 +18,21 @@ class GetMedicationsIds(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
-    
+
     @property
     def name(self) -> str:
         return "get_medications_ids"
-    
+
     @property
     def description(self) -> str:
+        return "Return a list of medication order IDs for a given patient MRN and CSN encounter."
+
+    @property
+    def display_name(self) -> str:
+        return "Get Medications IDs"
+
+    @property
+    def user_description(self) -> str:
         return "Return a list of medication order IDs for a given patient MRN and CSN encounter."
 
     @property
@@ -72,15 +80,23 @@ class ReadMedication(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
-    
+
     @property
     def name(self) -> str:
         return "read_medication"
-    
+
     @property
     def description(self) -> str:
         return "Return details about a specific medication as a JSON string."
-    
+
+    @property
+    def display_name(self) -> str:
+        return "Read Medication"
+
+    @property
+    def user_description(self) -> str:
+        return "Return details about a specific medication as a JSON string."
+
     @property
     def category(self) -> str:
         return "medications"
@@ -139,6 +155,14 @@ class HighlightMedication(Tool):
 
     @property
     def description(self) -> str:
+        return "Highlight the medication if the medication is in the list of medications you are searching for."
+
+    @property
+    def display_name(self) -> str:
+        return "Highlight Medication"
+
+    @property
+    def user_description(self) -> str:
         return "Highlight the medication if the medication is in the list of medications you are searching for."
 
     @property
@@ -210,6 +234,20 @@ class FilterMedication(Tool):
     @property
     def description(self) -> str:
         return "Filter the medication table based on a natural language prompt and return the order_ids of matching medications."
+
+    @property
+    def display_name(self) -> str:
+        return "Filter Medication"
+
+    @property
+    def user_description(self) -> str:
+        return "Filter the medication table based on a natural language prompt and return the order_ids of matching medications."
+
+    @property
+    def input_help(self) -> Dict[str, str]:
+        return {
+            "prompt": "Enter filtering criteria in natural language (e.g., 'Medications with dosage > 100' or 'Oral medications given today')."
+        }
 
     @property
     def category(self) -> str:

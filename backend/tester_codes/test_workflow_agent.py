@@ -37,6 +37,7 @@ from core.workflow.schemas.plan_schema import (
     ToolStep,
     LoopStep,
 )
+from core.workflow.schemas.trace_events import DecisionEvent, AgentResultEvent, FinalEvent
 
 
 def test_state_management():
@@ -177,7 +178,7 @@ def test_orchestrator_initialization():
     orchestrator = WorkflowOrchestrator()
 
     assert orchestrator.agents is not None
-    assert len(orchestrator.agents) == 7
+    assert len(orchestrator.agents) == 6  # clarifier is currently disabled
     assert "generator" in orchestrator.agents
     assert "editor" in orchestrator.agents
     assert "validator" in orchestrator.agents
@@ -242,7 +243,7 @@ def test_summarizer_agent(run_llm: bool = False):
 
 
 def test_full_create_workflow_flow(run_llm: bool = False):
-    """Test complete flow: user asks to create workflow."""
+    """Test complete flow: user asks to create workflow with streaming trace."""
     if not run_llm:
         print("⏭ Full create workflow test skipped (set run_llm=True to run)")
         return
@@ -250,17 +251,48 @@ def test_full_create_workflow_flow(run_llm: bool = False):
     orchestrator = WorkflowOrchestrator()
     state = WorkflowAgentState(mrn=12345, csn=67890)
 
-    result = orchestrator.process_message(
-        "Create a workflow to get all patient notes and summarize each one",
-        state
+    user_message = (
+        "read every patient note. For each note, "
+        "analyze for signs of depression with a span and reasoning. "
+        "If they show signs of depression, summarize its reasoning"
     )
 
+    print(f"\n{'='*60}")
+    print(f"USER: {user_message}")
+    print(f"{'='*60}\n")
+
+    result = None
+    for event in orchestrator.process_message_streaming(user_message, state):
+        if isinstance(event, DecisionEvent):
+            print(f"[DECISION] {event.action}")
+            if event.reasoning:
+                print(f"  Reasoning: {event.reasoning}")
+            if event.agent_task:
+                task_preview = event.agent_task[:80] + "..." if len(event.agent_task) > 80 else event.agent_task
+                print(f"  Task: {task_preview}")
+            print()
+
+        elif isinstance(event, AgentResultEvent):
+            status = "SUCCESS" if event.success else "FAILED"
+            print(f"[AGENT RESULT] {event.agent}: {status}")
+            print(f"  Summary: {event.summary}")
+            print(f"  Duration: {event.duration_ms}ms")
+            print()
+
+        elif isinstance(event, FinalEvent):
+            result = event.result
+            print(f"[FINAL] Response ready")
+            print()
+
+    assert result is not None
     assert result["response_type"] in ("text", "workflow")
     if result["response_type"] == "workflow":
         assert result["workflow"] is not None
         assert result["summary"] is not None
 
+    print(f"{'='*60}")
     print("✓ Full create workflow flow test passed")
+    print(f"  Response type: {result['response_type']}")
     print(f"  Response: {result['text'][:200] if result['text'] else 'No text'}...")
 
 

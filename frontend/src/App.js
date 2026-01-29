@@ -115,8 +115,8 @@ function AppContent() {
 
 function App() {
   useEffect(() => {
-    document.title = 'MedAssist - UHN DATA';
-    document.querySelector('link[rel="icon"]').href = '/data-favicon-no-background.png';
+    document.title = 'SickKids | MedAssist';
+    document.querySelector('link[rel="icon"]').href = '/favicon.ico';
   }, []);
 
   return (

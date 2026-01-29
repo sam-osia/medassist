@@ -1,9 +1,8 @@
 """Prompt filler agent - fills in prompt fields for tools that need them."""
 
-import json
 import logging
 from pathlib import Path
-from copy import deepcopy
+from typing import List
 
 logger = logging.getLogger("workflow.agents")
 
@@ -15,6 +14,7 @@ from core.workflow.schemas.plan_schema import (
     ToolStep,
     LoopStep,
     IfStep,
+    AllSteps,
 )
 from core.workflow.schemas.tool_inputs import PromptInput
 
@@ -65,23 +65,15 @@ Be specific and actionable in your prompts."""
         logger.info(f"[{self.name}] called")
         logger.debug(f"[{self.name}] user_intent: {inputs.user_intent}")
         try:
-            # Deep copy to avoid mutating original
-            workflow_dict = inputs.workflow.model_dump()
+            # Deep copy Pydantic objects directly (no dict conversion)
+            workflow = inputs.workflow.model_copy(deep=True)
 
-            # Process steps and fill prompts
-            filled_steps = self._process_steps(
-                workflow_dict.get('steps', []),
-                inputs.user_intent,
-                inputs.prompt_guides
-            )
-            workflow_dict['steps'] = filled_steps
-
-            # Parse back to Workflow
-            filled_workflow = Workflow.model_validate(workflow_dict)
+            # Process steps as Pydantic objects (in-place modification)
+            self._process_steps(workflow.steps, inputs.user_intent, inputs.prompt_guides)
 
             logger.info(f"[{self.name}] success")
             return PromptFillerOutput(
-                workflow=filled_workflow,
+                workflow=workflow,
                 success=True
             )
 
@@ -95,22 +87,16 @@ Be specific and actionable in your prompts."""
 
     def _process_steps(
         self,
-        steps: list,
+        steps: List[AllSteps],
         user_intent: str,
         prompt_guides: dict
-    ) -> list:
-        """Process steps and fill null prompts."""
-        result = []
-
+    ) -> None:
+        """Process steps in-place and fill null prompts."""
         for step in steps:
-            step = deepcopy(step)
-
-            if step.get('type') == 'tool':
-                # Check if this step has inputs with a null prompt
-                inputs = step.get('inputs', {})
-                if 'prompt' in inputs and inputs['prompt'] is None:
-                    # Fill the prompt
-                    tool_name = step.get('tool', '')
+            if isinstance(step, ToolStep):
+                # Check if inputs has a prompt field that is None
+                if hasattr(step.inputs, 'prompt') and step.inputs.prompt is None:
+                    tool_name = step.tool
                     guide = prompt_guides.get(tool_name, '')
                     filled_prompt = self._generate_prompt(
                         tool_name=tool_name,
@@ -119,35 +105,25 @@ Be specific and actionable in your prompts."""
                         guide=guide
                     )
                     if filled_prompt:
-                        inputs['prompt'] = filled_prompt
-                        step['inputs'] = inputs
+                        step.inputs.prompt = PromptInput(**filled_prompt)
 
-            elif step.get('type') == 'loop':
-                # Process loop body
-                body = step.get('body', [])
-                step['body'] = self._process_steps(body, user_intent, prompt_guides)
+            elif isinstance(step, LoopStep):
+                self._process_steps(step.body, user_intent, prompt_guides)
 
-            elif step.get('type') == 'if':
-                # Process then branch
-                then_step = step.get('then')
-                if then_step:
-                    processed = self._process_steps([then_step], user_intent, prompt_guides)
-                    step['then'] = processed[0] if processed else then_step
-
-            result.append(step)
-
-        return result
+            elif isinstance(step, IfStep):
+                # Process the 'then' branch (which is a single step)
+                self._process_steps([step.then], user_intent, prompt_guides)
 
     def _generate_prompt(
         self,
         tool_name: str,
-        step: dict,
+        step: ToolStep,
         user_intent: str,
         guide: str
     ) -> dict:
         """Generate a prompt for a specific tool step."""
         try:
-            step_str = json.dumps(step, indent=2)
+            step_str = step.model_dump_json(indent=2)
 
             system_prompt = f"""{self._prompt}
 

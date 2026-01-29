@@ -26,6 +26,7 @@ function PromptInput({
   disabled = false,
   availableVariables = [],
   outputSchema = null,
+  helpText,
   ...props
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -84,9 +85,9 @@ function PromptInput({
             <SettingsIcon />
           </IconButton>
         </Box>
-        {schema.description && (
+        {(helpText || schema.description) && (
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-            {schema.description}
+            {helpText || schema.description}
           </Typography>
         )}
       </Box>

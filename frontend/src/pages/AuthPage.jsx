@@ -18,7 +18,6 @@ import { useAuth } from '../contexts/AuthProvider';
 import { useNavigate } from 'react-router-dom';
 
 import AuthBackground from '../components/UI/Auth/AuthBackground';
-import medassistLogo from '../assets/logos/medassist_logo.png';
 
 const AuthPage = ({ onAuthSuccess }) => {
     const [username, setUsername] = useState('sam.osia');
@@ -71,23 +70,18 @@ const AuthPage = ({ onAuthSuccess }) => {
             width: '100%'
           }}
         >
-          <Box
+          <Typography
+            variant="h4"
+            component="div"
             sx={{
-              display: 'flex',
-              justifyContent: 'center',
+              color: 'text.primary',
+              fontWeight: 'bold',
+              fontFamily: 'Syncopate, monospace',
               mb: 4
             }}
           >
-            <img
-              src={medassistLogo}
-              alt="MedAssist Logo"
-              style={{
-                height: '60px',
-                maxWidth: '60%',
-                objectFit: 'contain'
-              }}
-            />
-          </Box>
+            MedAssist AI
+          </Typography>
 
           {error && (
             <Alert severity="error" sx={{ width: '100%', mb: 2 }}>

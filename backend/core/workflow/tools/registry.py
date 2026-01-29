@@ -274,10 +274,13 @@ def discover(refresh: bool = False) -> None:
     for tool in tools:
         _METADATA_BY_NAME[tool.name] = {
             "name": tool.name,
+            "display_name": getattr(tool, "display_name", tool.name),
             "category": getattr(tool, "category", None),
             "description": getattr(tool, "description", None),
+            "user_description": getattr(tool, "user_description", None),
             "input_schema": _build_input_schema(tool),
             "output_schema": _build_output_schema(tool),
+            "input_help": getattr(tool, "input_help", {}),
         }
 
     _LAST_UPDATED = datetime.utcnow().isoformat()

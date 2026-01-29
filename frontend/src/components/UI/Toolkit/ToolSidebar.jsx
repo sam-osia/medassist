@@ -81,7 +81,7 @@ const ToolSidebar = ({ tools, selectedToolName, onSelectTool, loading }) => {
                         <ListItemText
                           primary={
                             <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                              {tool.name}
+                              {tool.display_name || tool.name}
                             </Typography>
                           }
                           secondary={

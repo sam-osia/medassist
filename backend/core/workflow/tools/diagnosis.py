@@ -13,15 +13,23 @@ class GetDiagnosisIds(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
-    
+
     @property
     def name(self) -> str:
         return "get_diagnosis_ids"
-    
+
     @property
     def description(self) -> str:
         return "Return a list of diagnosis IDs for a given patient MRN and CSN encounter."
-    
+
+    @property
+    def display_name(self) -> str:
+        return "Get Diagnosis IDs"
+
+    @property
+    def user_description(self) -> str:
+        return "Return a list of diagnosis IDs for a given patient MRN and CSN encounter."
+
     @property
     def category(self) -> str:
         return "diagnosis"
@@ -68,15 +76,23 @@ class ReadDiagnosis(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
-    
+
     @property
     def name(self) -> str:
         return "read_diagnosis"
-    
+
     @property
     def description(self) -> str:
         return "Return details about a specific diagnosis as a JSON string."
-    
+
+    @property
+    def display_name(self) -> str:
+        return "Read Diagnosis"
+
+    @property
+    def user_description(self) -> str:
+        return "Return details about a specific diagnosis as a JSON string."
+
     @property
     def category(self) -> str:
         return "diagnosis"
@@ -135,6 +151,14 @@ class HighlightDiagnosis(Tool):
 
     @property
     def description(self) -> str:
+        return "Highlight the diagnosis if the diagnosis is in the list of diagnoses you are searching for."
+
+    @property
+    def display_name(self) -> str:
+        return "Highlight Diagnosis"
+
+    @property
+    def user_description(self) -> str:
         return "Highlight the diagnosis if the diagnosis is in the list of diagnoses you are searching for."
 
     @property

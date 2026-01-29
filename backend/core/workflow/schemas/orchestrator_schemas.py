@@ -18,6 +18,9 @@ class OrchestratorDecision(BaseModel):
         "respond_to_user"
     ]
 
+    # Brief explanation of why this decision was made
+    reasoning: Optional[str] = None
+
     # For respond_to_user action
     response_text: Optional[str] = None
     include_workflow: bool = False  # Whether to include current workflow in response

@@ -37,6 +37,49 @@ import { useTheme } from '@mui/material/styles';
 import ReactMarkdown from 'react-markdown';
 import { v4 as uuidv4 } from 'uuid';
 
+// Trace display component for showing orchestrator decisions and agent results
+const TraceDisplay = ({ trace }) => {
+  if (!trace || trace.length === 0) return null;
+
+  return (
+    <Box sx={{ mb: 1.5 }}>
+      {trace.map((event, idx) => (
+        <Typography
+          key={idx}
+          variant="body2"
+          component="div"
+          sx={{
+            color: 'text.disabled',
+            fontStyle: 'italic',
+            fontSize: '0.85rem',
+            mb: 0.5,
+            pl: 1,
+            borderLeft: '2px solid',
+            borderColor: 'divider'
+          }}
+        >
+          {event.event === 'decision' && (
+            <>
+              {/*<strong>{event.action}</strong>*/}
+              {event.reasoning && (
+                <span style={{ display: 'block', marginLeft: '8px', opacity: 0.8 }}>
+                  {event.reasoning}
+                </span>
+              )}
+            </>
+          )}
+          {event.event === 'agent_result' && (
+            <>
+              <strong>{event.agent}:</strong> {event.success ? '\u2713' : '\u2717'} {event.summary}
+              {event.duration_ms && <span style={{ opacity: 0.7 }}> ({event.duration_ms}ms)</span>}
+            </>
+          )}
+        </Typography>
+      ))}
+    </Box>
+  );
+};
+
 // Ensures every message has a unique ID
 const ensureMessageId = (message) => {
   return {
@@ -96,6 +139,9 @@ const PlanningAgentPage = () => {
   // Chat interface state
   const [conversationHistory, setConversationHistory] = useState([]);
   const [chatInput, setChatInput] = useState('');
+
+  // Trace state for streaming display
+  const [activeTrace, setActiveTrace] = useState([]);
 
   // Selected message state - tracks which message is currently displayed
   const [selectedMessageId, setSelectedMessageId] = useState(null);
@@ -196,6 +242,7 @@ const PlanningAgentPage = () => {
     setSelectedMessageId(null);
     setConversationHistory([]);
     setChatInput('');
+    setActiveTrace([]);
   };
 
   const handleDeleteConversation = async (convId) => {
@@ -281,6 +328,7 @@ const PlanningAgentPage = () => {
     setError(null);
     setResult(null);
     setSelectedPlanName(null); // Clear selected plan when generating new plan
+    setActiveTrace([]); // Reset trace
 
     // Initialize chat with the original prompt before starting generation
     initializeChat(prompt.trim());
@@ -289,7 +337,7 @@ const PlanningAgentPage = () => {
     addLoadingMessage();
 
     try {
-      const response = await workflowAgentService.processMessage(
+      const response = await workflowAgentService.processMessageStream(
         prompt.trim(),
         currentConversationId,
         0,  // mrn
@@ -297,33 +345,69 @@ const PlanningAgentPage = () => {
         null  // dataset
       );
 
-      // Remove loading message
-      removeLoadingMessage();
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
-      // Handle different response types
-      if (response.data.response_type === "text") {
-        // Add only assistant text message
-        addMessageToHistory({
-          type: 'assistant',
-          content: response.data.message
-        });
-      } else if (response.data.response_type === "workflow") {
-        // Extract workflow data from response
-        const workflowData = response.data.workflow_data;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let collectedTrace = [];
 
-        // Set result for right panel display
-        setResult({
-          raw_plan: workflowData.raw_plan
-        });
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
 
-        // Add assistant message
-        addMessageToHistory({
-          type: 'assistant',
-          content: response.data.message
-        });
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
 
-        // Add plan object to chat (using workflow_data as planData for compatibility)
-        addPlanToHistory({ raw_plan: workflowData.raw_plan }, response.data.message);
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          try {
+            const eventData = JSON.parse(line);
+
+            if (eventData.event === 'decision' || eventData.event === 'agent_result') {
+              collectedTrace.push(eventData);
+              setActiveTrace([...collectedTrace]);
+            } else if (eventData.event === 'final') {
+              removeLoadingMessage();
+
+              if (eventData.response_type === "text") {
+                addMessageToHistory({
+                  type: 'assistant',
+                  content: eventData.text,
+                  trace: collectedTrace
+                });
+              } else if (eventData.response_type === "workflow") {
+                setResult({ raw_plan: eventData.workflow_data.raw_plan });
+                addMessageToHistory({
+                  type: 'assistant',
+                  content: eventData.text,
+                  trace: collectedTrace
+                });
+                addPlanToHistory(
+                  { raw_plan: eventData.workflow_data.raw_plan },
+                  eventData.text,
+                  collectedTrace
+                );
+              }
+              setActiveTrace([]);
+            } else if (eventData.event === 'error') {
+              removeLoadingMessage();
+              setError(eventData.message);
+              addMessageToHistory({
+                type: 'assistant',
+                content: `Error: ${eventData.message}`,
+                trace: eventData.partial_trace || collectedTrace
+              });
+              setActiveTrace([]);
+            }
+          } catch (parseError) {
+            console.error('Error parsing stream event:', parseError, line);
+          }
+        }
       }
 
       // Refresh conversations list to show new conversation
@@ -332,7 +416,8 @@ const PlanningAgentPage = () => {
     } catch (err) {
       // Remove loading message on error
       removeLoadingMessage();
-      setError(err.response?.data?.detail || 'An error occurred while generating the workflow');
+      setError(err.message || 'An error occurred while generating the workflow');
+      setActiveTrace([]);
     } finally {
       setLoading(false);
       setAwaitingResponse(false);
@@ -482,11 +567,12 @@ const PlanningAgentPage = () => {
   };
 
   // Add plan message to chat history
-  const addPlanToHistory = (planData, message = 'Plan generated') => {
+  const addPlanToHistory = (planData, message = 'Plan generated', trace = []) => {
     const planMessage = ensureMessageId({
       type: 'plan',
       planData: planData,
       message: message,
+      trace: trace,
       timestamp: new Date()
     });
     setConversationHistory(prev => [...prev, planMessage]);
@@ -531,6 +617,7 @@ const PlanningAgentPage = () => {
     const userMessage = chatInput.trim();
     setChatInput('');
     setAwaitingResponse(true);
+    setActiveTrace([]); // Reset trace
 
     // Add user message to chat
     addMessageToHistory({
@@ -542,8 +629,8 @@ const PlanningAgentPage = () => {
     addLoadingMessage();
 
     try {
-      // Use workflowAgentService for all chat interactions
-      const response = await workflowAgentService.processMessage(
+      // Use workflowAgentService for all chat interactions with streaming
+      const response = await workflowAgentService.processMessageStream(
         userMessage,
         conversationId,
         0,  // mrn
@@ -551,33 +638,68 @@ const PlanningAgentPage = () => {
         null  // dataset
       );
 
-      // Remove loading message
-      removeLoadingMessage();
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
-      // Handle different response types
-      if (response.data.response_type === "text") {
-        // Add only assistant text message
-        addMessageToHistory({
-          type: 'assistant',
-          content: response.data.message
-        });
-      } else if (response.data.response_type === "workflow") {
-        // Extract workflow data from response
-        const workflowData = response.data.workflow_data;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let collectedTrace = [];
 
-        // Set result for right panel display
-        setResult({
-          raw_plan: workflowData.raw_plan
-        });
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
 
-        // Add assistant message
-        addMessageToHistory({
-          type: 'assistant',
-          content: response.data.message
-        });
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
 
-        // Add plan object to chat (using workflow_data as planData for compatibility)
-        addPlanToHistory({ raw_plan: workflowData.raw_plan }, response.data.message);
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          try {
+            const eventData = JSON.parse(line);
+
+            if (eventData.event === 'decision' || eventData.event === 'agent_result') {
+              collectedTrace.push(eventData);
+              setActiveTrace([...collectedTrace]);
+            } else if (eventData.event === 'final') {
+              removeLoadingMessage();
+
+              if (eventData.response_type === "text") {
+                addMessageToHistory({
+                  type: 'assistant',
+                  content: eventData.text,
+                  trace: collectedTrace
+                });
+              } else if (eventData.response_type === "workflow") {
+                setResult({ raw_plan: eventData.workflow_data.raw_plan });
+                addMessageToHistory({
+                  type: 'assistant',
+                  content: eventData.text,
+                  trace: collectedTrace
+                });
+                addPlanToHistory(
+                  { raw_plan: eventData.workflow_data.raw_plan },
+                  eventData.text,
+                  collectedTrace
+                );
+              }
+              setActiveTrace([]);
+            } else if (eventData.event === 'error') {
+              removeLoadingMessage();
+              addMessageToHistory({
+                type: 'assistant',
+                content: `Error: ${eventData.message}`,
+                trace: eventData.partial_trace || collectedTrace
+              });
+              setActiveTrace([]);
+            }
+          } catch (parseError) {
+            console.error('Error parsing stream event:', parseError, line);
+          }
+        }
       }
 
       // Refresh conversations list to update last_message_date
@@ -590,8 +712,9 @@ const PlanningAgentPage = () => {
       // Add error message to chat
       addMessageToHistory({
         type: 'assistant',
-        content: 'Error: ' + (err.response?.data?.detail || err.message)
+        content: 'Error: ' + (err.message || 'Unknown error')
       });
+      setActiveTrace([]);
     } finally {
       setAwaitingResponse(false);
     }
@@ -797,83 +920,98 @@ const PlanningAgentPage = () => {
                       {conversationHistory.map((message) => {
                         if (message.type === 'plan') {
                           return (
-                            <PlanMessageCard
-                              key={message.id}
-                              planData={message.planData}
-                              isSelected={selectedMessageId === message.id}
-                              onClick={() => handlePlanClick(message.id)}
-                              timestamp={message.timestamp}
-                            />
+                            <Box key={message.id}>
+                              {/* Display trace if present */}
+                              {message.trace && message.trace.length > 0 && (
+                                <TraceDisplay trace={message.trace} />
+                              )}
+                              <PlanMessageCard
+                                planData={message.planData}
+                                isSelected={selectedMessageId === message.id}
+                                onClick={() => handlePlanClick(message.id)}
+                                timestamp={message.timestamp}
+                              />
+                            </Box>
                           );
                         }
-                        
+
                         if (message.type === 'loading') {
                           return (
+                            <Box key={message.id}>
+                              {/* Show active trace during loading */}
+                              {activeTrace.length > 0 && (
+                                <TraceDisplay trace={activeTrace} />
+                              )}
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  justifyContent: 'flex-start',
+                                  mb: 0.5
+                                }}
+                              >
+                                <Box
+                                  sx={{
+                                    maxWidth: '80%',
+                                    p: 1.5,
+                                    borderRadius: 2,
+                                    backgroundColor: 'action.hover',
+                                  }}
+                                >
+                                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontStyle: 'italic' }}>
+                                    Generating response...
+                                  </Typography>
+                                  <Skeleton
+                                    variant="text"
+                                    width="100%"
+                                    height={20}
+                                    animation="pulse"
+                                    sx={{ mb: 0.5 }}
+                                  />
+                                  <Skeleton
+                                    variant="text"
+                                    width="60%"
+                                    height={20}
+                                    animation="pulse"
+                                  />
+                                </Box>
+                              </Box>
+                            </Box>
+                          );
+                        }
+
+                        return (
+                          <Box key={message.id}>
+                            {/* Display trace for assistant messages */}
+                            {message.type === 'assistant' && message.trace && message.trace.length > 0 && (
+                              <TraceDisplay trace={message.trace} />
+                            )}
                             <Box
-                              key={message.id}
                               sx={{
                                 display: 'flex',
-                                justifyContent: 'flex-start',
+                                justifyContent: message.type === 'user' ? 'flex-end' : 'flex-start',
                                 mb: 0.5
                               }}
                             >
                               <Box
                                 sx={{
-                                  maxWidth: '80%',
+                                  maxWidth: message.type === 'user' ? '80%' : '100%',
                                   p: 1.5,
                                   borderRadius: 2,
-                                  backgroundColor: 'action.hover',
+                                  backgroundColor: message.type === 'user'
+                                    ? 'custom.alternateRow'
+                                    : 'transparent',
+                                  color: 'text.primary',
+                                  wordBreak: 'break-word'
                                 }}
                               >
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontStyle: 'italic' }}>
-                                  Generating response...
-                                </Typography>
-                                <Skeleton 
-                                  variant="text" 
-                                  width="100%" 
-                                  height={20}
-                                  animation="pulse"
-                                  sx={{ mb: 0.5 }}
-                                />
-                                <Skeleton 
-                                  variant="text" 
-                                  width="60%" 
-                                  height={20}
-                                  animation="pulse"
-                                />
+                                <ReactMarkdown
+                                  components={{
+                                    p: ({node, ...props}) => <Typography variant="body2" component="span" {...props} />,
+                                  }}
+                                >
+                                  {message.content}
+                                </ReactMarkdown>
                               </Box>
-                            </Box>
-                          );
-                        }
-                        
-                        return (
-                          <Box
-                            key={message.id}
-                            sx={{
-                              display: 'flex',
-                              justifyContent: message.type === 'user' ? 'flex-end' : 'flex-start',
-                              mb: 0.5
-                            }}
-                          >
-                            <Box
-                              sx={{
-                                maxWidth: message.type === 'user' ? '80%' : '100%',
-                                p: 1.5,
-                                borderRadius: 2,
-                                backgroundColor: message.type === 'user'
-                                  ? 'custom.alternateRow'
-                                  : 'transparent',
-                                color: 'text.primary',
-                                wordBreak: 'break-word'
-                              }}
-                            >
-                              <ReactMarkdown
-                                components={{
-                                  p: ({node, ...props}) => <Typography variant="body2" component="span" {...props} />,
-                                }}
-                              >
-                                {message.content}
-                              </ReactMarkdown>
                             </Box>
                           </Box>
                         );
