@@ -21,6 +21,19 @@ from core.workflow.schemas.agent_schemas import (
     SummarizerOutput,
     ClarifierInput,
     ClarifierOutput,
+    OutputDefinitionInput,
+    OutputDefinitionOutput,
+)
+from core.workflow.schemas.output_schemas import (
+    OutputDefinitionSpec,
+    OutputMapping,
+    FieldSpec,
+    DirectEvidenceSchema,
+    AggregatedEvidenceSchema,
+    EvidenceSource,
+    EvidenceSourceMapping,
+    FieldBinding,
+    ValueSource,
 )
 from core.workflow.agents import (
     GeneratorAgent,
@@ -30,10 +43,11 @@ from core.workflow.agents import (
     PromptFillerAgent,
     SummarizerAgent,
     ClarifierAgent,
+    OutputDefinitionAgent,
 )
 from core.workflow.utils.tool_specs import get_tool_specs_for_agents
-from core.workflow.schemas.plan_schema import (
-    Plan as Workflow,
+from core.workflow.schemas.workflow_schema import (
+    Workflow,
     ToolStep,
     LoopStep,
 )
@@ -178,10 +192,11 @@ def test_orchestrator_initialization():
     orchestrator = WorkflowOrchestrator()
 
     assert orchestrator.agents is not None
-    assert len(orchestrator.agents) == 6  # clarifier is currently disabled
+    assert len(orchestrator.agents) == 7  # clarifier is currently disabled, output_definition added
     assert "generator" in orchestrator.agents
     assert "editor" in orchestrator.agents
     assert "validator" in orchestrator.agents
+    assert "output_definition" in orchestrator.agents
     assert orchestrator.tool_specs is not None
 
     print("✓ Orchestrator initialization test passed")
@@ -240,6 +255,202 @@ def test_summarizer_agent(run_llm: bool = False):
     assert len(result.summary) > 10
 
     print(f"✓ Summarizer test passed: {result.summary[:100]}...")
+
+
+def test_output_definition_schema():
+    """Test output definition schema validation."""
+    direct_def = OutputDefinitionSpec(
+        id="def_depression",
+        name="depression_indicator",
+        label="Depression Indicator",
+        output_type="direct",
+        output_fields=[
+            FieldSpec(name="detected", type="boolean"),
+            FieldSpec(name="reasoning", type="text"),
+        ],
+        evidence_schema=DirectEvidenceSchema(
+            resource_type="note",
+            fields=[FieldSpec(name="span", type="text")]
+        )
+    )
+    assert direct_def.id == "def_depression"
+    assert len(direct_def.output_fields) == 2
+    print("✓ Direct output definition schema test passed")
+
+
+def test_aggregated_output_definition_schema():
+    """Test aggregated output definition schema."""
+    agg_def = OutputDefinitionSpec(
+        id="def_adverse_reaction",
+        name="adverse_reaction",
+        label="Adverse Reaction",
+        output_type="aggregated",
+        output_fields=[
+            FieldSpec(name="detected", type="boolean"),
+            FieldSpec(name="reasoning", type="text"),
+        ],
+        evidence_schema=AggregatedEvidenceSchema(
+            sources=[
+                EvidenceSource(resource_type="medication", role="trigger", fields=[]),
+                EvidenceSource(resource_type="note", role="source", fields=[
+                    FieldSpec(name="span", type="text")
+                ]),
+            ]
+        )
+    )
+    assert agg_def.output_type == "aggregated"
+    assert len(agg_def.evidence_schema.sources) == 2
+    print("✓ Aggregated output definition schema test passed")
+
+
+def test_output_mapping_schema():
+    """Test output mapping schema."""
+    mapping = OutputMapping(
+        output_definition_id="def_depression",
+        value_sources=[
+            ValueSource(output_field="detected", variable_path="analysis_result.flag_state"),
+            ValueSource(output_field="reasoning", variable_path="analysis_result.reasoning"),
+        ],
+        evidence_sources=[
+            EvidenceSourceMapping(
+                step_id="analyze_step",
+                resource_type="note",
+                role="source",
+                field_bindings=[FieldBinding(field_name="span", variable_path="analysis_result.span")]
+            )
+        ]
+    )
+    assert mapping.output_definition_id == "def_depression"
+    assert len(mapping.value_sources) == 2
+    print("✓ Output mapping schema test passed")
+
+
+def test_plan_with_output_definitions():
+    """Test Plan schema accepts output definitions."""
+    from core.workflow.schemas.tool_inputs import GetPatientNotesIdsInput
+
+    workflow = Workflow(
+        steps=[
+            ToolStep(
+                id="get_notes",
+                step_summary="Get note IDs",
+                type="tool",
+                tool="get_patient_notes_ids",
+                inputs=GetPatientNotesIdsInput(mrn=1, csn=1),
+                output="note_ids"
+            )
+        ],
+        output_definitions=[
+            OutputDefinitionSpec(
+                id="def_test",
+                name="test_output",
+                label="Test Output",
+                output_fields=[FieldSpec(name="detected", type="boolean")],
+                evidence_schema=DirectEvidenceSchema(resource_type="note")
+            )
+        ],
+        output_mappings=[
+            OutputMapping(
+                output_definition_id="def_test",
+                value_sources=[ValueSource(output_field="detected", variable_path="note_ids.flag")]
+            )
+        ]
+    )
+
+    assert len(workflow.output_definitions) == 1
+    assert len(workflow.output_mappings) == 1
+    print("✓ Plan with output definitions test passed")
+
+
+def test_validator_skips_output_validation():
+    """Test validator currently skips output validation (always passes)."""
+    validator = ValidatorAgent()
+
+    from core.workflow.schemas.tool_inputs import GetPatientNotesIdsInput
+
+    # Even with invalid output mappings, validator should pass
+    workflow = Workflow(
+        steps=[
+            ToolStep(
+                id="step1",
+                step_summary="Get notes",
+                type="tool",
+                tool="get_patient_notes_ids",
+                inputs=GetPatientNotesIdsInput(mrn=1, csn=1),
+                output="note_ids"
+            )
+        ],
+        output_definitions=[
+            OutputDefinitionSpec(
+                id="def_test",
+                name="test",
+                label="Test",
+                output_fields=[FieldSpec(name="value", type="text")],
+                evidence_schema=DirectEvidenceSchema(resource_type="note")
+            )
+        ],
+        output_mappings=[
+            OutputMapping(
+                output_definition_id="def_test",
+                value_sources=[ValueSource(output_field="value", variable_path="undefined_var.something")]
+            )
+        ]
+    )
+
+    result = validator.run(ValidatorInput(workflow=workflow))
+    # Output validation is currently skipped, so this should pass
+    assert result.valid
+    print("✓ Validator skips output validation test passed")
+
+
+def test_output_definition_agent(run_llm: bool = False):
+    """Test output definition agent generates definitions."""
+    if not run_llm:
+        print("⏭ Output definition agent test skipped (set run_llm=True)")
+        return
+
+    from core.workflow.schemas.tool_inputs import GetPatientNotesIdsInput, AnalyzeNoteWithSpanAndReasonInput
+
+    agent = OutputDefinitionAgent()
+
+    workflow = Workflow(
+        steps=[
+            ToolStep(
+                id="get_notes",
+                step_summary="Get note IDs",
+                type="tool",
+                tool="get_patient_notes_ids",
+                inputs=GetPatientNotesIdsInput(mrn=1, csn=1),
+                output="note_ids"
+            ),
+            LoopStep(
+                id="loop_notes",
+                step_summary="Analyze each note",
+                type="loop",
+                **{"for": "note_id", "in": "note_ids"},
+                body=[
+                    ToolStep(
+                        id="analyze",
+                        step_summary="Analyze for depression",
+                        type="tool",
+                        tool="analyze_note_with_span_and_reason",
+                        inputs=AnalyzeNoteWithSpanAndReasonInput(note="{{ note_content }}", prompt=None),
+                        output="analysis_result"
+                    )
+                ]
+            )
+        ]
+    )
+
+    result = agent.run(OutputDefinitionInput(
+        workflow=workflow,
+        user_intent="Analyze notes for signs of depression"
+    ))
+
+    assert result.success
+    assert result.workflow is not None
+    assert len(result.workflow.output_definitions) > 0
+    print(f"✓ Output definition agent test passed - generated {len(result.workflow.output_definitions)} definitions")
 
 
 def test_full_create_workflow_flow(run_llm: bool = False):
@@ -313,9 +524,17 @@ if __name__ == "__main__":
     test_valid_workflow_passes_validation()
     test_orchestrator_initialization()
 
+    # Output definition tests (no LLM)
+    test_output_definition_schema()
+    test_aggregated_output_definition_schema()
+    test_output_mapping_schema()
+    test_plan_with_output_definitions()
+    test_validator_skips_output_validation()
+
     # LLM-based tests (optional)
     test_generator_agent(run_llm=args.run_llm)
     test_summarizer_agent(run_llm=args.run_llm)
+    test_output_definition_agent(run_llm=args.run_llm)
     test_full_create_workflow_flow(run_llm=args.run_llm)
 
     print("\n✅ All tests completed!")

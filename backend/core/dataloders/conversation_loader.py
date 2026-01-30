@@ -80,11 +80,21 @@ class ConversationCache:
         logger.info(f"Loaded {len(conversations)} conversations from disk")
         return conversations
 
-    def save_conversation(self, conversation_id: str, messages: List[Dict[str, Any]], created_by: str = None) -> bool:
-        """Save a conversation to disk and update cache."""
+    def save_conversation(self, conversation_id: str, data: Dict[str, Any], created_by: str = None) -> bool:
+        """Save a conversation to disk and update cache.
+
+        Args:
+            conversation_id: Unique identifier for the conversation
+            data: Dict with 'messages' (list) and 'workflows' (dict) keys
+            created_by: User ID who created the conversation
+        """
         try:
             # Ensure conversations directory exists
             os.makedirs(CONVERSATIONS_DIR, exist_ok=True)
+
+            # Extract messages and workflows from data
+            messages = data.get("messages", [])
+            workflows = data.get("workflows", {})
 
             # Load existing conversation or create new
             existing_conversation = self.get_conversation(conversation_id)
@@ -95,6 +105,7 @@ class ConversationCache:
             conversation_data = {
                 "conversation_id": conversation_id,
                 "messages": messages,
+                "workflows": workflows,
                 "last_message_date": current_time
             }
 
@@ -197,9 +208,15 @@ class ConversationCache:
 _cache = ConversationCache()
 
 
-def save_conversation(conversation_id: str, messages: List[Dict[str, Any]], created_by: str = None) -> bool:
-    """Save a conversation with the given data."""
-    return _cache.save_conversation(conversation_id, messages, created_by)
+def save_conversation(conversation_id: str, data: Dict[str, Any], created_by: str = None) -> bool:
+    """Save a conversation with the given data.
+
+    Args:
+        conversation_id: Unique identifier for the conversation
+        data: Dict with 'messages' (list) and 'workflows' (dict) keys
+        created_by: User ID who created the conversation
+    """
+    return _cache.save_conversation(conversation_id, data, created_by)
 
 
 def get_conversation(conversation_id: str, current_user: str = None) -> Optional[Dict[str, Any]]:

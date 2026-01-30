@@ -8,6 +8,7 @@ from .validator import ValidatorAgent
 from .prompt_filler import PromptFillerAgent
 from .summarizer import SummarizerAgent
 from .clarifier import ClarifierAgent
+from .output_definition import OutputDefinitionAgent
 
 __all__ = [
     "BaseAgent",
@@ -18,4 +19,5 @@ __all__ = [
     "PromptFillerAgent",
     "SummarizerAgent",
     "ClarifierAgent",
+    "OutputDefinitionAgent",
 ]

@@ -9,8 +9,8 @@ logger = logging.getLogger("workflow.agents")
 from pydantic import BaseModel
 
 from core.llm_provider import call
-from core.workflow.schemas.plan_schema import (
-    Plan as Workflow,
+from core.workflow.schemas.workflow_schema import (
+    Workflow,
     ToolStep,
     LoopStep,
     IfStep,

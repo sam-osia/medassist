@@ -4,7 +4,7 @@ import json
 
 from core.llm_provider import call
 from core.workflow.tools.base import Tool
-from core.workflow.schemas.plan_schema import Plan
+from core.workflow.schemas.workflow_schema import Workflow
 from core.workflow.tools.notes import (
     GetPatientNotesIds, ReadPatientNote,
     SummarizePatientNote, HighlightPatientNote, AnalyzeNoteWithSpanAndReason
@@ -13,17 +13,15 @@ from core.workflow.tools.flowsheets import (
     ReadFlowsheetsTable, SummarizeFlowsheetsTable
 )
 from core.workflow.tools.medications import (
-    GetMedicationsIds, ReadMedication, HighlightMedication
+    GetMedicationsIds, ReadMedication
 )
 from core.workflow.tools.diagnosis import (
-    GetDiagnosisIds, ReadDiagnosis, HighlightDiagnosis
+    GetDiagnosisIds, ReadDiagnosis
 )
-from core.deprecated.examples.planning_examples import combined_example_1
 
-class GeneratePlanInput(BaseModel):
-    prompt: str
-    mrn: Optional[int] = 0
-    csn: Optional[int] = 0
+class EditPlanInput(BaseModel):
+    existing_plan: Dict[str, Any]  # Accept any dict instead of strict Plan validation
+    edit_request: str
 
 def get_tools_specifications(tools_list):
     specifications = {}
@@ -36,11 +34,12 @@ def get_tools_specifications(tools_list):
         }
     return specifications
 
-def build_agent_prompt(tools_specifications: dict,
-                       user_prompt: str,
-                       task_inputs: dict):
+def build_edit_prompt(tools_specifications: dict,
+                     original_plan: dict,
+                     general_edit_request: str,
+                     task_inputs: dict):
     system = f"""
-    You are a planning agent that emits JSON execution plans.
+    You are a plan editing agent that modifies existing JSON execution plans based on user edit requests.
     Use only the tools provided.
     Bind tool results to variables via 'output'.
     Use {{var}} to reference variables.
@@ -50,30 +49,34 @@ def build_agent_prompt(tools_specifications: dict,
     During execution, the content in {{}} will be executed as Python code using the eval() function.
     Return *VALID JSON ONLY*; no prose.
 
+    Your task is to modify the existing plan to incorporate the user's general edit request.
+    This could involve adding new steps, removing steps, reordering steps, or modifying the overall workflow.
+    Maintain consistency in variable references and ensure all step IDs remain unique.
+
     TOOLS:
     {json.dumps(tools_specifications, indent=2)}
     """
     
     user = json.dumps({
-        "task": user_prompt,
+        "original_plan": original_plan,
+        "general_edit_request": general_edit_request,
         "inputs": task_inputs,
-        "examples": combined_example_1
+        "instructions": f"Modify the existing plan to incorporate this general edit request: {general_edit_request}"
     }, indent=2)
     
     return system, user
 
-
-class GeneratePlan(Tool):
+class EditPlan(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "sickkids_icu"
     
     @property
     def name(self) -> str:
-        return "generate_plan"
+        return "edit_plan"
     
     @property
     def description(self) -> str:
-        return "Generate a structured execution plan with steps for a given objective or task using available medical data tools."
+        return "Edit and modify an existing structured execution plan based on user feedback or change requests."
     
     @property
     def category(self) -> str:
@@ -86,7 +89,7 @@ class GeneratePlan(Tool):
             "properties": {
                 "raw_plan": {
                     "type": "object",
-                    "description": "The structured plan object with steps and metadata"
+                    "description": "The updated structured plan object with steps and metadata"
                 }
             },
             "required": ["raw_plan"]
@@ -97,26 +100,20 @@ class GeneratePlan(Tool):
         return {
             "type": "object",
             "properties": {
-                "prompt": {
+                "existing_plan": {
+                    "type": "object",
+                    "description": "The current plan dict to be modified"
+                },
+                "edit_request": {
                     "type": "string",
-                    "description": "The user's request or objective to create a plan for"
-                },
-                "mrn": {
-                    "type": "integer",
-                    "description": "Medical Record Number (optional, defaults to 0)",
-                    "default": 0
-                },
-                "csn": {
-                    "type": "integer", 
-                    "description": "CSN encounter ID (optional, defaults to 0)",
-                    "default": 0
+                    "description": "Description of the changes to make to the plan"
                 }
             },
-            "required": ["prompt"],
+            "required": ["existing_plan", "edit_request"],
             "additionalProperties": False
         }
     
-    def __call__(self, inputs: GeneratePlanInput) -> Dict[str, Any]:
+    def __call__(self, inputs: EditPlanInput) -> Dict[str, Any]:
         # Initialize all tools
         tools_list = [
             GetPatientNotesIds(),
@@ -128,20 +125,24 @@ class GeneratePlan(Tool):
             SummarizeFlowsheetsTable(),
             GetMedicationsIds(),
             ReadMedication(),
-            HighlightMedication(),
             GetDiagnosisIds(),
             ReadDiagnosis(),
-            HighlightDiagnosis()
         ]
 
-        patient_information = f"Patient Information: MRN: {inputs.mrn}, CSN: {inputs.csn}."
-        newline = "\n"
-        full_prompt = f"{inputs.prompt}{newline}{patient_information}"
+        # Extract MRN and CSN from existing plan or use defaults
+        mrn = 0
+        csn = 0
+        if 'metadata' in inputs.existing_plan and 'inputs' in inputs.existing_plan['metadata']:
+            mrn = inputs.existing_plan['metadata']['inputs'].get('mrn', 0)
+            csn = inputs.existing_plan['metadata']['inputs'].get('csn', 0)
 
-        system_prompt, user_prompt_formatted = build_agent_prompt(
+        task_inputs = {"mrn": mrn, "csn": csn}
+        
+        system_prompt, user_prompt_formatted = build_edit_prompt(
             get_tools_specifications(tools_list),
-            full_prompt,
-            {"mrn": inputs.mrn, "csn": inputs.csn}
+            inputs.existing_plan,
+            inputs.edit_request,
+            task_inputs
         )
 
         result = call(
@@ -151,7 +152,6 @@ class GeneratePlan(Tool):
         )
 
         plan = result.parsed
-        print(plan)
 
         return {
             "raw_plan": plan.dict()

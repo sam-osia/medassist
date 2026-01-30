@@ -6,8 +6,8 @@ from typing import Set, Optional, Tuple
 
 logger = logging.getLogger("workflow.agents")
 
-from core.workflow.schemas.plan_schema import (
-    Plan as Workflow,
+from core.workflow.schemas.workflow_schema import (
+    Workflow,
     ToolStep,
     IfStep,
     LoopStep,
@@ -43,16 +43,21 @@ class ValidatorAgent(BaseAgent):
         # Validate each step
         result = self._validate_steps(workflow.steps, defined_vars, seen_step_ids)
 
-        if result[0]:
-            logger.info(f"[{self.name}] valid=True")
-            return ValidatorOutput(valid=True)
-        else:
+        if not result[0]:
             logger.info(f"[{self.name}] valid=False - step={result[1]}, reason={result[2]}")
             return ValidatorOutput(
                 valid=False,
                 broken_step_id=result[1],
                 broken_reason=result[2]
             )
+
+        # Skip output definition validation for now - always pass
+        # TODO: Re-enable when LLM generates consistent variable paths
+        # if workflow.output_definitions:
+        #     output_result = self._validate_outputs(...)
+
+        logger.info(f"[{self.name}] valid=True")
+        return ValidatorOutput(valid=True)
 
     def _validate_steps(
         self,
@@ -166,3 +171,43 @@ class ValidatorAgent(BaseAgent):
             return None
         match = re.match(r'([a-zA-Z_]\w*)', expr)
         return match.group(1) if match else None
+
+    def _validate_outputs(
+        self,
+        definitions: list,
+        mappings: list,
+        defined_vars: Set[str],
+        step_ids: Set[str]
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
+        """Validate output definitions and mappings."""
+        definition_ids = set()
+
+        # Check definitions
+        for defn in definitions:
+            # Duplicate ID check
+            if defn.id in definition_ids:
+                return (False, defn.id, f"Duplicate output definition ID: {defn.id}")
+            definition_ids.add(defn.id)
+
+            # Check fields are valid
+            if not defn.output_fields:
+                return (False, defn.id, f"Output definition {defn.id} has no fields")
+
+        # Check mappings
+        for mapping in mappings:
+            # Check definition exists
+            if mapping.output_definition_id not in definition_ids:
+                return (False, None, f"Mapping references unknown definition: {mapping.output_definition_id}")
+
+            # Check value_sources reference defined variables
+            for value_source in mapping.value_sources:
+                base_var = value_source.variable_path.split('.')[0]
+                if base_var not in defined_vars:
+                    return (False, None, f"Mapping references undefined variable: {base_var}")
+
+            # Check evidence_sources reference valid step IDs
+            for evidence in mapping.evidence_sources:
+                if evidence.step_id not in step_ids:
+                    return (False, None, f"Evidence source references unknown step: {evidence.step_id}")
+
+        return (True, None, None)

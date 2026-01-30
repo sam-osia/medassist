@@ -27,7 +27,7 @@ import {
   Edit as EditIcon,
   Visibility as VisibilityIcon
 } from '@mui/icons-material';
-import { planningService } from '../../../services/ApiService';
+import { workflowBuilderService } from '../../../services/ApiService';
 import { getStepDisplayConfig } from './StepDisplayConfig';
 import PromptDialog from '../Prompt/PromptDialog';
 
@@ -104,7 +104,7 @@ const getKeyParameters = (toolName, inputs) => {
 };
 
 // Primary step information component
-const StepPrimary = ({ step, stepNumber, originalPrompt, originalPlan, onPlanUpdate, onLoadingChange, onStepEdit, expanded, onToggleExpand, allowStepEditing = true }) => {
+const StepPrimary = ({ step, stepNumber, originalPrompt, originalWorkflow, onWorkflowUpdate, onLoadingChange, onStepEdit, expanded, onToggleExpand, allowStepEditing = true }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(step.step_summary || '');
   const [isLoading, setIsLoading] = useState(false);
@@ -767,7 +767,7 @@ const StepTertiary = ({ step, expanded, onPromptEdit }) => {
   );
 };
 
-const StepComponent = ({ step, stepNumber, depth = 0, originalPrompt, originalPlan, onPlanUpdate, onLoadingChange, onStepEdit, onPromptEdit, allowStepEditing = true }) => {
+const StepComponent = ({ step, stepNumber, depth = 0, originalPrompt, originalWorkflow, onWorkflowUpdate, onLoadingChange, onStepEdit, onPromptEdit, allowStepEditing = true }) => {
   const [expanded, setExpanded] = useState(false);
   const theme = useTheme();
 
@@ -815,8 +815,8 @@ const StepComponent = ({ step, stepNumber, depth = 0, originalPrompt, originalPl
                 step={bodyStep}
                 depth={depth + 1}
                 originalPrompt={originalPrompt}
-                originalPlan={originalPlan}
-                onPlanUpdate={onPlanUpdate}
+                originalWorkflow={originalWorkflow}
+                onWorkflowUpdate={onWorkflowUpdate}
                 onLoadingChange={onLoadingChange}
                 onStepEdit={onStepEdit}
                 onPromptEdit={onPromptEdit}
@@ -863,8 +863,8 @@ const StepComponent = ({ step, stepNumber, depth = 0, originalPrompt, originalPl
             step={step.then}
             depth={depth + 1}
             originalPrompt={originalPrompt}
-            originalPlan={originalPlan}
-            onPlanUpdate={onPlanUpdate}
+            originalWorkflow={originalWorkflow}
+            onWorkflowUpdate={onWorkflowUpdate}
             onLoadingChange={onLoadingChange}
             onStepEdit={onStepEdit}
             onPromptEdit={onPromptEdit}
@@ -913,8 +913,8 @@ const StepComponent = ({ step, stepNumber, depth = 0, originalPrompt, originalPl
             step={step}
             stepNumber={stepNumber}
             originalPrompt={originalPrompt}
-            originalPlan={originalPlan}
-            onPlanUpdate={onPlanUpdate}
+            originalWorkflow={originalWorkflow}
+            onWorkflowUpdate={onWorkflowUpdate}
             onLoadingChange={onLoadingChange}
             onStepEdit={onStepEdit}
             expanded={expanded}

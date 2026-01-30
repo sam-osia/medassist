@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, Literal, Union, Annotated
 from pydantic import BaseModel, Field, ConfigDict
+from core.workflow.schemas.output_schemas import OutputDefinitionSpec, OutputMapping
 from core.workflow.schemas.tool_inputs import (
     GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput,
     HighlightPatientNoteInput, AnalyzeNoteWithSpanAndReasonInput,
@@ -10,7 +11,7 @@ from core.workflow.schemas.tool_inputs import (
 )
 
 ToolInput = Union[
-    GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput, 
+    GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput,
     HighlightPatientNoteInput, AnalyzeNoteWithSpanAndReasonInput, ReadFlowsheetsTableInput,
     SummarizeFlowsheetsTableInput, GetMedicationsIdsInput, ReadMedicationInput,
     GetDiagnosisIdsInput, ReadDiagnosisInput, KeywordCountInput, IdentifyFlagInput,
@@ -76,9 +77,11 @@ class LoopStep(BaseStep):
 #     variable: str
 #     value: bool
 
-# Discriminated‑union with the "type" field
+# Discriminated-union with the "type" field
 AllSteps = Union[ToolStep, IfStep, LoopStep]
 
-# ---------- The Plan ----------
-class Plan(BaseModel):
+# ---------- The Workflow ----------
+class Workflow(BaseModel):
     steps: List[AllSteps]
+    output_definitions: List[OutputDefinitionSpec] = []
+    output_mappings: List[OutputMapping] = []

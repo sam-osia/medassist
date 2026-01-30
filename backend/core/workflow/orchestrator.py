@@ -10,7 +10,7 @@ from typing import Dict, Any, Generator, Optional
 from core.llm_provider import call
 
 logger = logging.getLogger("workflow.orchestrator")
-from core.workflow.schemas.plan_schema import Plan as Workflow
+from core.workflow.schemas.workflow_schema import Workflow
 
 from .state import WorkflowAgentState
 from .schemas.orchestrator_schemas import OrchestratorDecision
@@ -23,6 +23,7 @@ from .schemas.agent_schemas import (
     PromptFillerInput,
     SummarizerInput,
     ClarifierInput,
+    OutputDefinitionInput,
 )
 from .agents import (
     GeneratorAgent,
@@ -32,6 +33,7 @@ from .agents import (
     PromptFillerAgent,
     SummarizerAgent,
     ClarifierAgent,
+    OutputDefinitionAgent,
 )
 from .utils.tool_specs import get_tool_specs_for_agents
 
@@ -51,6 +53,7 @@ class WorkflowOrchestrator:
             "validator": ValidatorAgent(),
             "prompt_filler": PromptFillerAgent(dataset),
             "summarizer": SummarizerAgent(),
+            "output_definition": OutputDefinitionAgent(dataset),
             # "clarifier": ClarifierAgent(),
         }
         self.tool_specs = get_tool_specs_for_agents(dataset)
@@ -290,7 +293,7 @@ Decide what to do next. If the workflow is ready and summarized, respond to user
         if result is None:
             return False, "no result"
 
-        # Generator, Editor, ChunkOperator, PromptFiller - have success/error_message/workflow
+        # Generator, Editor, ChunkOperator, PromptFiller, OutputDefinition - have success/error_message/workflow
         if hasattr(result, 'success'):
             if result.success:
                 if agent_name == "generator" and hasattr(result, 'workflow') and result.workflow:
@@ -302,6 +305,9 @@ Decide what to do next. If the workflow is ready and summarized, respond to user
                     return True, "modified workflow"
                 elif agent_name == "prompt_filler":
                     return True, "processed workflow"
+                elif agent_name == "output_definition" and hasattr(result, 'workflow') and result.workflow:
+                    def_count = len(result.workflow.output_definitions) if result.workflow.output_definitions else 0
+                    return True, f"created {def_count} output definitions"
                 return True, "success"
             error = getattr(result, 'error_message', 'unknown error') or 'unknown error'
             return False, f"failed: {error[:40]}"
@@ -395,12 +401,25 @@ Decide what to do next. If the workflow is ready and summarized, respond to user
             inputs = SummarizerInput(workflow=workflow)
             return self.agents["summarizer"].run(inputs)
 
+        elif action == "call_output_definition":
+            workflow = state.pending_workflow or state.get_current_workflow()
+            if not workflow:
+                return {"success": False, "error_message": "No workflow for output definition"}
+
+            user_intent = state.conversation[-1].content if state.conversation else ""
+
+            inputs = OutputDefinitionInput(
+                workflow=workflow,
+                user_intent=user_intent
+            )
+            return self.agents["output_definition"].run(inputs)
+
         return None
 
     def _process_agent_result(self, action: str, result: Any, state: WorkflowAgentState):
         """Update state based on agent result."""
 
-        if action in ("call_generator", "call_editor", "call_chunk_operator"):
+        if action in ("call_generator", "call_editor", "call_chunk_operator", "call_output_definition"):
             # These agents produce workflows
             if hasattr(result, 'success') and result.success and hasattr(result, 'workflow'):
                 state.pending_workflow = result.workflow

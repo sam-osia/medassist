@@ -7,7 +7,7 @@ import { ThemeModeProvider, useThemeMode } from './contexts/ThemeProvider';
 import CssBaseline from '@mui/material/CssBaseline';
 import PatientsChartPage from './pages/PatientsChartPage';
 import SinglePatientPage from './pages/SinglePatientPage';
-import PlanningAgentPage from './pages/PlanningAgentPage';
+import WorkflowAgentPage from './pages/WorkflowAgentPage';
 import ToolkitPlaygroundPage from './pages/ToolkitPlaygroundPage';
 import ProjectsPage from './pages/ProjectsPage';
 import IndividualProjectPage from './pages/IndividualProjectPage';
@@ -99,7 +99,7 @@ function AppContent() {
             <Route path="/projects" element={<ProtectedRoute><><Navbar /><ProjectsPage /></></ProtectedRoute>} />
             <Route path="/projects/:projectName" element={<ProtectedRoute><><Navbar /><IndividualProjectPage /></></ProtectedRoute>} />
             <Route path="/projects/:projectName/dataset/:datasetName/patient/:mrn" element={<ProtectedRoute><><Navbar /><SinglePatientPage /></></ProtectedRoute>} />
-            <Route path="/planning-agent" element={<ProtectedRoute><><Navbar /><PlanningAgentPage /></></ProtectedRoute>} />
+            <Route path="/planning-agent" element={<ProtectedRoute><><Navbar /><WorkflowAgentPage /></></ProtectedRoute>} />
             <Route path="/tool-playground" element={<ProtectedRoute><><Navbar /><ToolkitPlaygroundPage /></></ProtectedRoute>} />
             <Route path="/caboodle" element={<ProtectedRoute><><Navbar /><CaboodlePage /></></ProtectedRoute>} />
             <Route path="/account" element={<ProtectedRoute><><Navbar /><AccountPage /></></ProtectedRoute>} />

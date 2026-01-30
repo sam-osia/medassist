@@ -46,60 +46,54 @@ ApiService.interceptors.response.use(
     }
 );
 
-// Planning agent functions
-export const planningService = {
-    // Generate a response using the conversational planning agent
-    conversationalPlan: (prompt, mrn = 0, csn = 0, dataset = null, currentPlan = null, conversationId = null) =>
-        ApiService.post('/planning/conversational-plan', {
-            prompt, mrn, csn, dataset, current_plan: currentPlan, conversation_id: conversationId
-        }),
-
-    // Edit a specific step in a plan
-    editPlanStep: (originalPrompt, originalPlan, stepId, changeRequest) =>
-        ApiService.post('/planning/edit-plan-step', {
+// Workflow builder functions
+export const workflowBuilderService = {
+    // Edit a specific step in a workflow
+    editWorkflowStep: (originalPrompt, originalWorkflow, stepId, changeRequest) =>
+        ApiService.post('/workflow/workflow-definitions/edit-step', {
             original_prompt: originalPrompt,
-            original_plan: originalPlan,
+            original_plan: originalWorkflow,
             step_id: stepId,
             change_request: changeRequest
         }),
 
     // Update a step's prompt input
-    updateStepPrompt: (rawPlan, stepId, newPrompt) =>
-        ApiService.post('/planning/plans/update-step-prompt', {
-            raw_plan: rawPlan,
+    updateStepPrompt: (rawWorkflow, stepId, newPrompt) =>
+        ApiService.post('/workflow/workflow-definitions/update-step-prompt', {
+            raw_plan: rawWorkflow,
             step_id: stepId,
             new_prompt: newPrompt
         }),
 
-    // Plan management functions
-    // Get all saved plans
-    getAllPlans: () => ApiService.get('/planning/plans'),
+    // Saved workflow management functions
+    // Get all saved workflows
+    getAllSavedWorkflows: () => ApiService.get('/workflow/workflow-definitions'),
 
-    // Get a specific saved plan
-    getPlan: (planName) => ApiService.get(`/planning/plans/${planName}`),
+    // Get a specific saved workflow
+    getSavedWorkflow: (workflowName) => ApiService.get(`/workflow/workflow-definitions/${workflowName}`),
 
-    // Save a plan
-    savePlan: (planName, rawPlan) =>
-        ApiService.post(`/planning/plans/${planName}`, {
-            raw_plan: rawPlan
+    // Save a workflow
+    saveSavedWorkflow: (workflowName, rawWorkflow) =>
+        ApiService.post(`/workflow/workflow-definitions/${workflowName}`, {
+            raw_plan: rawWorkflow
         }),
 
-    // Delete a plan
-    deletePlan: (planName) => ApiService.delete(`/planning/plans/${planName}`)
+    // Delete a saved workflow
+    deleteSavedWorkflow: (workflowName) => ApiService.delete(`/workflow/workflow-definitions/${workflowName}`)
 };
 
 // Conversation management functions
 export const conversationService = {
     // Get all conversations for current user
-    getAllConversations: () => ApiService.get('/planning/conversations'),
+    getAllConversations: () => ApiService.get('/workflow-agent/conversations'),
 
     // Get specific conversation
     getConversation: (conversationId) =>
-        ApiService.get(`/planning/conversations/${conversationId}`),
+        ApiService.get(`/workflow-agent/conversations/${conversationId}`),
 
     // Delete conversation
     deleteConversation: (conversationId) =>
-        ApiService.delete(`/planning/conversations/${conversationId}`)
+        ApiService.delete(`/workflow-agent/conversations/${conversationId}`)
 };
 
 // Chat functions

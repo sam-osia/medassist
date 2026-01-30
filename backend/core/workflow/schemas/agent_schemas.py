@@ -3,7 +3,7 @@
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any, Literal
 
-from core.workflow.schemas.plan_schema import Plan as Workflow
+from core.workflow.schemas.workflow_schema import Workflow
 
 
 class GeneratorInput(BaseModel):
@@ -98,3 +98,16 @@ class ClarifierOutput(BaseModel):
     questions: List[str] = []
     out_of_scope: bool = False
     out_of_scope_reason: Optional[str] = None
+
+
+class OutputDefinitionInput(BaseModel):
+    """Input for the output definition agent."""
+    workflow: Workflow  # Plan with steps (may have empty output_definitions)
+    user_intent: str    # Original user request for context
+
+
+class OutputDefinitionOutput(BaseModel):
+    """Output from the output definition agent."""
+    workflow: Optional[Workflow] = None  # Plan with output_definitions and output_mappings filled
+    success: bool
+    error_message: Optional[str] = None

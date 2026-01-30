@@ -4,7 +4,7 @@ import logging
 import binascii
 import datetime
 
-from core.dataloders import user_loader, datasets_loader, projects_loader, plan_loader
+from core.dataloders import user_loader, datasets_loader, projects_loader, workflow_def_loader
 from core.auth import auth_service, permissions
 from .dependencies import get_admin_user, get_current_user
 
@@ -216,10 +216,10 @@ def delete_user_endpoint(username: str) -> Dict[str, Any]:
                 logger.info(f"Reassigned project {project['project_name']} from {username} to system")
 
         # Reassign owned plans to "system"
-        all_plans = plan_loader.list_plans()
+        all_plans = workflow_def_loader.list_workflow_defs()
         for plan in all_plans:
             if plan.get("created_by") == username:
-                plan_loader.reassign_plan_owner(plan["plan_name"], "system")
+                workflow_def_loader.reassign_workflow_def_owner(plan["plan_name"], "system")
                 logger.info(f"Reassigned plan {plan['plan_name']} from {username} to system")
 
         # Delete the user

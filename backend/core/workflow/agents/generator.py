@@ -7,7 +7,7 @@ from pathlib import Path
 from core.llm_provider import call
 
 logger = logging.getLogger("workflow.agents")
-from core.workflow.schemas.plan_schema import Plan as Workflow
+from core.workflow.schemas.workflow_schema import Workflow
 
 from .base import BaseAgent
 from ..schemas.agent_schemas import GeneratorInput, GeneratorOutput

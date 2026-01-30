@@ -6,10 +6,16 @@ import os
 import json
 import datetime
 import shutil
+import copy
 
 from core.dataloders.projects_loader import get_project, project_exists
 from core.dataloders.datasets_loader import get_patient_dataset_summary, get_patient_details
-from core.dataloders.plan_loader import get_plan
+from core.dataloders.workflow_def_loader import (
+    get_workflow_def, save_workflow_def, list_workflow_defs,
+    delete_workflow_def, workflow_def_exists
+)
+from core.deprecated.planning.plan_supervisor_agent import conversational_planning_agent
+from core.auth import permissions
 from core.dataloders.experiment_loader import (
     get_all_experiments,
     get_experiment_details,
@@ -611,16 +617,16 @@ def create_experiment(
         # Create experiment folder
         create_experiment_folder(experiment_name, project_name, workflow_name, dataset_name)
 
-        # Load workflow plan and extract prompts (with permission check)
-        plan_data = get_plan(workflow_name, current_user)
-        if not plan_data:
+        # Load workflow definition and extract prompts (with permission check)
+        workflow_data = get_workflow_def(workflow_name, current_user)
+        if not workflow_data:
             raise HTTPException(
                 status_code=404,
                 detail=f"Workflow '{workflow_name}' not found or access denied"
             )
 
-        raw_plan = plan_data.get("raw_plan", {})
-        steps = raw_plan.get("steps", [])
+        raw_workflow = workflow_data.get("raw_workflow", {})
+        steps = raw_workflow.get("steps", [])
 
         # Extract all analyze_note_with_span_and_reason steps (recursively searches nested structures)
         analyze_steps = _extract_analyze_steps(steps)
@@ -672,4 +678,250 @@ def create_experiment(
         raise
     except Exception as e:
         logger.error(f"Error in create_experiment: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+# =============================================================================
+# Workflow Definition Endpoints (migrated from planning.py)
+# =============================================================================
+
+def _find_and_update_step_prompt(steps: list, step_id: str, new_prompt: Dict[str, Any]) -> bool:
+    """
+    Recursively find a step by ID and update its prompt input.
+    Returns True if step was found and updated, False otherwise.
+    """
+    for step in steps:
+        # Check if this is the target step
+        if step.get('id') == step_id:
+            # Validate step has the required structure
+            if step.get('type') != 'tool':
+                raise ValueError(f"Step '{step_id}' is not a tool step")
+            if 'inputs' not in step:
+                raise ValueError(f"Step '{step_id}' has no inputs")
+
+            # Update the prompt
+            step['inputs']['prompt'] = new_prompt
+            return True
+
+        # Search in nested structures
+        # Loop bodies
+        if step.get('type') == 'loop' and 'body' in step:
+            if _find_and_update_step_prompt(step['body'], step_id, new_prompt):
+                return True
+
+        # If/then branches
+        if step.get('type') == 'if' and 'then' in step:
+            if _find_and_update_step_prompt([step['then']], step_id, new_prompt):
+                return True
+
+    return False
+
+
+@router.get("/workflow-definitions")
+def list_saved_workflow_definitions(current_user: str = Depends(get_current_user)) -> Dict[str, Any]:
+    """Get list of all saved workflow definitions."""
+    try:
+        workflows = list_workflow_defs(current_user)
+
+        return {
+            "status": "success",
+            "total_plans": len(workflows),
+            "plans": workflows
+        }
+
+    except Exception as e:
+        logger.error(f"Error in list_saved_workflow_definitions: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.get("/workflow-definitions/{workflow_name}")
+def get_saved_workflow_definition(workflow_name: str, current_user: str = Depends(get_current_user)) -> Dict[str, Any]:
+    """Get a specific saved workflow definition."""
+    try:
+        workflow_data = get_workflow_def(workflow_name, current_user)
+
+        if not workflow_data:
+            raise HTTPException(status_code=404, detail=f"Workflow '{workflow_name}' not found")
+
+        return {
+            "status": "success",
+            **workflow_data
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_saved_workflow_definition: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.post("/workflow-definitions/{workflow_name}")
+def save_workflow_definition(workflow_name: str, data: Dict[str, Any] = Body(...), current_user: str = Depends(get_current_user)) -> Dict[str, Any]:
+    """Save or update a workflow definition."""
+    try:
+        raw_workflow = data.get("raw_plan") or data.get("raw_workflow")
+
+        if not raw_workflow:
+            raise HTTPException(
+                status_code=400,
+                detail="Missing required field: raw_plan or raw_workflow"
+            )
+
+        # Validate workflow name (alphanumeric and underscores only)
+        if not workflow_name.replace('_', '').replace('-', '').isalnum():
+            raise HTTPException(
+                status_code=400,
+                detail="Workflow name can only contain letters, numbers, hyphens, and underscores"
+            )
+
+        success = save_workflow_def(workflow_name, raw_workflow, created_by=current_user)
+
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to save workflow")
+
+        return {
+            "status": "success",
+            "message": f"Workflow '{workflow_name}' saved successfully",
+            "plan_name": workflow_name
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in save_workflow_definition: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.delete("/workflow-definitions/{workflow_name}")
+def delete_saved_workflow_definition(workflow_name: str, current_user: str = Depends(get_current_user)) -> Dict[str, Any]:
+    """Delete a saved workflow definition."""
+    try:
+        if not workflow_def_exists(workflow_name):
+            raise HTTPException(status_code=404, detail=f"Workflow '{workflow_name}' not found")
+
+        # Check permissions (admin or creator)
+        if not permissions.has_plan_access(current_user, workflow_name):
+            raise HTTPException(
+                status_code=403,
+                detail="Only workflow creator or admin can delete this workflow"
+            )
+
+        success = delete_workflow_def(workflow_name)
+
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete workflow")
+
+        return {
+            "status": "success",
+            "message": f"Workflow '{workflow_name}' deleted successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in delete_saved_workflow_definition: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.post("/workflow-definitions/update-step-prompt")
+def update_step_prompt(data: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """Update a specific step's prompt input without LLM regeneration."""
+    try:
+        raw_workflow = data.get("raw_plan") or data.get("raw_workflow")
+        step_id = data.get("step_id")
+        new_prompt = data.get("new_prompt")
+
+        # Validate required fields
+        if not all([raw_workflow, step_id, new_prompt]):
+            raise HTTPException(
+                status_code=400,
+                detail="Missing required fields: raw_plan/raw_workflow, step_id, new_prompt"
+            )
+
+        # Validate prompt structure
+        if not isinstance(new_prompt, dict):
+            raise HTTPException(status_code=400, detail="new_prompt must be an object")
+        if not new_prompt.get("system_prompt") or not new_prompt.get("user_prompt"):
+            raise HTTPException(
+                status_code=400,
+                detail="new_prompt must have system_prompt and user_prompt fields"
+            )
+
+        # Deep copy to avoid mutations
+        updated_workflow = copy.deepcopy(raw_workflow)
+
+        # Find and update the step
+        steps = updated_workflow.get('steps', [])
+        if not _find_and_update_step_prompt(steps, step_id, new_prompt):
+            raise HTTPException(status_code=400, detail=f"Step '{step_id}' not found in workflow")
+
+        return {
+            "status": "success",
+            "raw_plan": updated_workflow,
+            "raw_workflow": updated_workflow
+        }
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error in update_step_prompt: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.post("/workflow-definitions/edit-step")
+def edit_workflow_step(data: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """Edit a specific step in a workflow using LLM."""
+    try:
+        original_prompt = data.get("original_prompt")
+        original_workflow = data.get("original_plan") or data.get("original_workflow")
+        step_id = data.get("step_id")
+        change_request = data.get("change_request")
+
+        if not all([original_prompt, original_workflow, step_id, change_request]):
+            raise HTTPException(
+                status_code=400,
+                detail="Missing required fields: original_prompt, original_plan/original_workflow, step_id, change_request"
+            )
+
+        # Build a minimal conversation context with the workflow and edit request
+        messages = [
+            {"role": "user", "content": original_prompt},
+            {"role": "assistant", "content": f"plan_v1: {json.dumps(original_workflow, indent=2)}"},
+            {"role": "user", "content": change_request}
+        ]
+
+        # Use conversational planning agent to handle the edit
+        result = conversational_planning_agent(
+            messages=messages,
+            mrn=0,
+            csn=0,
+            dataset=None
+        )
+
+        # Check if a plan was generated
+        if result["response_type"] != "plan":
+            raise HTTPException(
+                status_code=500,
+                detail=f"Expected plan response but got: {result['response_type']}"
+            )
+
+        # Extract plan data from result
+        plan_data = result["plan_data"]
+
+        return {
+            "status": "success",
+            "message": result["text_response"],
+            "plan_data": {
+                "plan_id": f"plan_edited_{step_id}",
+                "raw_plan": plan_data["raw_plan"],
+                "raw_workflow": plan_data["raw_plan"]
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in edit_workflow_step: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

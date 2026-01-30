@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.workflow.orchestrator import WorkflowOrchestrator
 from core.workflow.state import WorkflowAgentState, ConversationEntry
-from core.workflow.schemas.plan_schema import Plan as Workflow
+from core.workflow.schemas.workflow_schema import Workflow
 
 # ANSI colors
 CYAN = "\033[36m"

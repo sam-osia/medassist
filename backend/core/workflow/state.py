@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Literal
 
-from core.workflow.schemas.plan_schema import Plan as Workflow
+from core.workflow.schemas.workflow_schema import Workflow
 
 
 @dataclass

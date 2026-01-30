@@ -15,6 +15,7 @@ class OrchestratorDecision(BaseModel):
         "call_prompt_filler",
         "call_summarizer",
         "call_clarifier",
+        "call_output_definition",
         "respond_to_user"
     ]
 

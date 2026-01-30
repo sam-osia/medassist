@@ -10,30 +10,44 @@ from uuid import uuid4
 
 from core.workflow.orchestrator import WorkflowOrchestrator
 from core.workflow.state import WorkflowAgentState
-from core.workflow.schemas.plan_schema import Plan as Workflow
+from core.workflow.schemas.workflow_schema import Workflow
 from core.dataloders.conversation_loader import (
-    save_conversation, get_conversation,
-    conversation_exists
+    save_conversation, get_conversation, list_conversations,
+    delete_conversation, conversation_exists
 )
+from core.auth import permissions
 from .dependencies import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 logger = logging.getLogger(__name__)
 
 
-def state_from_stored_messages(messages: list, mrn: int, csn: int) -> WorkflowAgentState:
-    """Convert stored message format to WorkflowAgentState."""
+def state_from_stored_messages(conv_data: dict, mrn: int, csn: int) -> WorkflowAgentState:
+    """Convert stored format to WorkflowAgentState.
+
+    Args:
+        conv_data: Dict with 'messages' (list) and 'workflows' (dict) keys
+        mrn: Medical record number
+        csn: Contact serial number
+    """
     state = WorkflowAgentState(mrn=mrn, csn=csn)
+
+    messages = conv_data.get("messages", [])
+    workflows = conv_data.get("workflows", {})
+
+    # Reconstruct workflow_history from stored workflows
+    for workflow_id, workflow_data in workflows.items():
+        workflow = Workflow.model_validate(workflow_data["raw_workflow"])
+        state.workflow_history[workflow_id] = workflow
+
+    # Reconstruct conversation
     for msg in messages:
         if msg['type'] == 'user':
             state.add_user_message(msg['content'])
         elif msg['type'] == 'assistant':
-            state.add_assistant_message(msg['content'])
-        elif msg['type'] == 'plan':
-            # Reconstruct workflow and add to history
-            workflow = Workflow.model_validate(msg['planData']['raw_plan'])
-            workflow_id = state.add_workflow(workflow)
-            # Don't duplicate assistant message - plan messages include the response
+            workflow_ref = msg.get('workflow_ref')
+            state.add_assistant_message(msg['content'], workflow_ref=workflow_ref)
+
     return state
 
 
@@ -41,40 +55,34 @@ def state_to_stored_messages_with_trace(
     state: WorkflowAgentState,
     trace: List[Dict[str, Any]],
     error_message: Optional[str] = None
-) -> list:
-    """Convert WorkflowAgentState to storage format, attaching trace to final message."""
+) -> dict:
+    """Convert WorkflowAgentState to storage format.
+
+    Returns dict with 'messages' and 'workflows' keys.
+    Trace is attached to the final assistant message.
+    """
     messages = []
     conversation_len = len(state.conversation)
 
     for i, entry in enumerate(state.conversation):
         is_last = (i == conversation_len - 1)
 
+        msg = {
+            "id": str(uuid4()),
+            "type": entry.role,
+            "content": entry.content,
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+
+        # Add workflow_ref if present
         if entry.workflow_ref:
-            # This is a plan message
-            workflow = state.workflow_history.get(entry.workflow_ref)
-            if workflow:
-                msg = {
-                    "id": str(uuid4()),
-                    "type": "plan",
-                    "planData": {"raw_plan": workflow.model_dump()},
-                    "message": entry.content,
-                    "timestamp": datetime.datetime.now().isoformat()
-                }
-                # Attach trace to final plan message
-                if is_last and trace:
-                    msg["trace"] = trace
-                messages.append(msg)
-        else:
-            msg = {
-                "id": str(uuid4()),
-                "type": entry.role,
-                "content": entry.content,
-                "timestamp": datetime.datetime.now().isoformat()
-            }
-            # Attach trace to final assistant message
-            if is_last and entry.role == "assistant" and trace:
-                msg["trace"] = trace
-            messages.append(msg)
+            msg["workflow_ref"] = entry.workflow_ref
+
+        # Attach trace to final assistant message
+        if is_last and entry.role == "assistant" and trace:
+            msg["trace"] = trace
+
+        messages.append(msg)
 
     # If error occurred, add error message with trace
     if error_message:
@@ -86,7 +94,12 @@ def state_to_stored_messages_with_trace(
             "timestamp": datetime.datetime.now().isoformat()
         })
 
-    return messages
+    # Build workflows dict from state.workflow_history
+    workflows = {}
+    for workflow_id, workflow in state.workflow_history.items():
+        workflows[workflow_id] = {"raw_workflow": workflow.model_dump()}
+
+    return {"messages": messages, "workflows": workflows}
 
 
 @router.post("/message")
@@ -102,16 +115,20 @@ async def process_message_stream(data: Dict[str, Any] = Body(...), current_user:
         raise HTTPException(status_code=400, detail="Message is required")
 
     # Load existing conversation or create new state
-    messages = []
     if conversation_id and conversation_exists(conversation_id):
         conv = get_conversation(conversation_id, current_user)
         if conv:
-            messages = conv.get('messages', [])
+            conv_data = {
+                "messages": conv.get('messages', []),
+                "workflows": conv.get('workflows', {})
+            }
         else:
             raise HTTPException(status_code=403, detail="Access denied")
+    else:
+        conv_data = {"messages": [], "workflows": {}}
 
     # Convert to state
-    state = state_from_stored_messages(messages, mrn, csn)
+    state = state_from_stored_messages(conv_data, mrn, csn)
 
     async def event_generator():
         trace = []  # Collect trace events for persistence
@@ -161,9 +178,9 @@ async def process_message_stream(data: Dict[str, Any] = Body(...), current_user:
                     }
                     if result["response_type"] == "workflow" and result.get("workflow"):
                         final_data["workflow_data"] = {
-                            "raw_plan": result["workflow"].model_dump(),
-                            "summary": result.get("summary")
+                            "raw_workflow": result["workflow"].model_dump()
                         }
+                        final_data["workflow_id"] = result.get("workflow_id")
                     yield json.dumps(final_data) + "\n"
 
         except Exception as e:
@@ -192,3 +209,83 @@ async def process_message_stream(data: Dict[str, Any] = Body(...), current_user:
             "Content-Type": "text/event-stream"
         }
     )
+
+
+# =============================================================================
+# Conversation Endpoints (migrated from planning.py)
+# =============================================================================
+
+@router.get("/conversations")
+def list_saved_conversations(current_user: str = Depends(get_current_user)) -> Dict[str, Any]:
+    """Get list of all saved conversations for current user."""
+    try:
+        conversations = list_conversations(current_user)
+
+        return {
+            "status": "success",
+            "total_conversations": len(conversations),
+            "conversations": conversations
+        }
+
+    except Exception as e:
+        logger.error(f"Error in list_saved_conversations: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.get("/conversations/{conversation_id}")
+def get_saved_conversation(conversation_id: str, current_user: str = Depends(get_current_user)) -> Dict[str, Any]:
+    """Get a specific saved conversation."""
+    try:
+        conversation_data = get_conversation(conversation_id, current_user)
+
+        if not conversation_data:
+            raise HTTPException(status_code=404, detail=f"Conversation '{conversation_id}' not found")
+
+        return {
+            "status": "success",
+            "conversation_id": conversation_data.get("conversation_id"),
+            "messages": conversation_data.get("messages", []),
+            "workflows": conversation_data.get("workflows", {}),
+            "created_date": conversation_data.get("created_date"),
+            "last_message_date": conversation_data.get("last_message_date"),
+            "title": conversation_data.get("title", "Untitled Conversation")
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_saved_conversation: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.delete("/conversations/{conversation_id}")
+def delete_saved_conversation(conversation_id: str, current_user: str = Depends(get_current_user)) -> Dict[str, Any]:
+    """Delete a saved conversation."""
+    try:
+        # Check if conversation exists
+        conversation_data = get_conversation(conversation_id, current_user)
+        if not conversation_data:
+            raise HTTPException(status_code=404, detail=f"Conversation '{conversation_id}' not found")
+
+        # Check permissions (admin or creator)
+        if not permissions.is_admin(current_user) and conversation_data.get('created_by') != current_user:
+            raise HTTPException(
+                status_code=403,
+                detail="Only conversation creator or admin can delete this conversation"
+            )
+
+        success = delete_conversation(conversation_id)
+
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete conversation")
+
+        return {
+            "status": "success",
+            "message": f"Conversation '{conversation_id}' deleted successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in delete_saved_conversation: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

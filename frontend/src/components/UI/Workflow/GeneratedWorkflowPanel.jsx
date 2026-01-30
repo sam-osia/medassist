@@ -9,18 +9,19 @@ import {
 } from '@mui/material';
 import { Save as SaveIcon } from '@mui/icons-material';
 import StepComponent from './StepComponent';
+import OutputDefinitionsSection from './OutputDefinitionsSection';
 
-const GeneratedPlanPanel = ({
+const GeneratedWorkflowPanel = ({
   result,
-  updatingPlan,
+  updatingWorkflow,
   prompt,
-  onPlanUpdate,
+  onWorkflowUpdate,
   onLoadingChange,
   onStepEdit,
   onPromptEdit,
   allowStepEditing = true,
-  onSavePlan,
-  selectedPlanName,
+  onSaveWorkflow,
+  selectedWorkflowName,
   awaitingResponse,
   loading
 }) => {
@@ -29,7 +30,7 @@ const GeneratedPlanPanel = ({
       <Card sx={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', maxHeight: '100%' }}>
         <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', pb: 1 }}>
           <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            📋 {updatingPlan ? 'Updating Plan...' : 'Generated Plan'}
+            {updatingWorkflow ? 'Updating Workflow...' : 'Generated Workflow'}
           </Typography>
           <Box sx={{
             flex: 1,
@@ -41,15 +42,15 @@ const GeneratedPlanPanel = ({
             pr: 1,
             minHeight: 0
           }}>
-            {result?.raw_plan?.steps ? (
-              result.raw_plan.steps.map((step, index) => (
+            {result?.raw_workflow?.steps ? (
+              result.raw_workflow.steps.map((step, index) => (
                 <StepComponent
                   key={step.id || index}
                   step={step}
                   stepNumber={index + 1}
                   originalPrompt={prompt}
-                  originalPlan={result.raw_plan}
-                  onPlanUpdate={onPlanUpdate}
+                  originalWorkflow={result.raw_workflow}
+                  onWorkflowUpdate={onWorkflowUpdate}
                   onLoadingChange={onLoadingChange}
                   onStepEdit={onStepEdit}
                   onPromptEdit={onPromptEdit}
@@ -71,7 +72,7 @@ const GeneratedPlanPanel = ({
                     opacity: 0.6
                   }}
                 >
-                  Plan has no steps to display
+                  Workflow has no steps to display
                 </Typography>
               </Box>
             ) : (
@@ -89,14 +90,22 @@ const GeneratedPlanPanel = ({
                     opacity: 0.6
                   }}
                 >
-                  Prompt the planning agent to generate a plan
+                  Prompt the workflow agent to generate a workflow
                 </Typography>
               </Box>
             )}
+
+            {/* Output Definitions Section */}
+            {result?.raw_workflow?.output_definitions?.length > 0 && (
+              <OutputDefinitionsSection
+                definitions={result.raw_workflow.output_definitions}
+                mappings={result.raw_workflow.output_mappings || []}
+              />
+            )}
           </Box>
 
-          {/* Save Plan Button */}
-          {result && !awaitingResponse && !selectedPlanName && (
+          {/* Save Workflow Button */}
+          {result && !awaitingResponse && !selectedWorkflowName && (
             <Box sx={{
               display: 'flex',
               justifyContent: 'flex-end',
@@ -109,17 +118,17 @@ const GeneratedPlanPanel = ({
               <Button
                 variant="contained"
                 startIcon={<SaveIcon />}
-                onClick={onSavePlan}
+                onClick={onSaveWorkflow}
                 disabled={loading}
                 sx={{ minWidth: 140 }}
               >
-                Save Plan
+                Save Workflow
               </Button>
             </Box>
           )}
 
           {/* Updating overlay */}
-          {updatingPlan && (
+          {updatingWorkflow && (
             <Box
               sx={{
                 position: 'absolute',
@@ -141,7 +150,7 @@ const GeneratedPlanPanel = ({
             >
               <CircularProgress size={40} />
               <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
-                Updating Plan
+                Updating Workflow
               </Typography>
             </Box>
           )}
@@ -151,4 +160,4 @@ const GeneratedPlanPanel = ({
   );
 };
 
-export default GeneratedPlanPanel;
+export default GeneratedWorkflowPanel;

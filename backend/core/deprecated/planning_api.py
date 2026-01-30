@@ -3,8 +3,8 @@ from typing import Dict, Any
 import logging
 import copy
 
-from core.workflow.planning.plan_supervisor_agent import conversational_planning_agent
-from core.dataloders.plan_loader import save_plan, get_plan, list_plans, delete_plan, plan_exists
+from core.deprecated.planning.plan_supervisor_agent import conversational_planning_agent
+from core.dataloders.workflow_def_loader import save_workflow_def, get_workflow_def, list_workflow_defs, delete_workflow_def, workflow_def_exists
 from core.dataloders.conversation_loader import (
     save_conversation, get_conversation, list_conversations,
     delete_conversation, conversation_exists
@@ -224,7 +224,7 @@ def edit_plan_step(data: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
 def list_saved_plans(current_user: str = Depends(get_current_user)) -> Dict[str, Any]:
     """Get list of all saved plans."""
     try:
-        plans = list_plans(current_user)
+        plans = list_workflow_defs(current_user)
 
         return {
             "status": "success",
@@ -319,7 +319,7 @@ def update_step_prompt(data: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
 def get_saved_plan(plan_name: str, current_user: str = Depends(get_current_user)) -> Dict[str, Any]:
     """Get a specific saved plan."""
     try:
-        plan_data = get_plan(plan_name, current_user)
+        plan_data = get_workflow_def(plan_name, current_user)
 
         if not plan_data:
             raise HTTPException(status_code=404, detail=f"Plan '{plan_name}' not found")
@@ -355,7 +355,7 @@ def save_new_plan(plan_name: str, data: Dict[str, Any] = Body(...), current_user
                 detail="Plan name can only contain letters, numbers, hyphens, and underscores"
             )
 
-        success = save_plan(plan_name, raw_plan, created_by=current_user)
+        success = save_workflow_def(plan_name, raw_plan, created_by=current_user)
 
         if not success:
             raise HTTPException(status_code=500, detail="Failed to save plan")
@@ -377,7 +377,7 @@ def save_new_plan(plan_name: str, data: Dict[str, Any] = Body(...), current_user
 def delete_saved_plan(plan_name: str, current_user: str = Depends(get_current_user)) -> Dict[str, Any]:
     """Delete a saved plan."""
     try:
-        if not plan_exists(plan_name):
+        if not workflow_def_exists(plan_name):
             raise HTTPException(status_code=404, detail=f"Plan '{plan_name}' not found")
 
         # Check permissions (admin or creator)
@@ -387,7 +387,7 @@ def delete_saved_plan(plan_name: str, current_user: str = Depends(get_current_us
                 detail="Only plan creator or admin can delete this plan"
             )
 
-        success = delete_plan(plan_name)
+        success = delete_workflow_def(plan_name)
 
         if not success:
             raise HTTPException(status_code=500, detail="Failed to delete plan")
@@ -434,6 +434,7 @@ def get_saved_conversation(conversation_id: str, current_user: str = Depends(get
             "status": "success",
             "conversation_id": conversation_data.get("conversation_id"),
             "messages": conversation_data.get("messages", []),
+            "workflows": conversation_data.get("workflows", {}),
             "created_date": conversation_data.get("created_date"),
             "last_message_date": conversation_data.get("last_message_date"),
             "title": conversation_data.get("title", "Untitled Conversation")

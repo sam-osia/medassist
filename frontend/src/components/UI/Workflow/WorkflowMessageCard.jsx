@@ -1,6 +1,6 @@
 import React from 'react';
-import { 
-  Box, 
+import {
+  Box,
   Card,
   CardContent,
   Typography,
@@ -8,17 +8,17 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 
-const PlanMessageCard = ({ 
-  planData, 
-  isSelected, 
-  onClick, 
-  timestamp 
+const WorkflowMessageCard = ({
+  planData,  // Keep prop name for backward compatibility with stored data
+  isSelected,
+  onClick,
+  timestamp
 }) => {
   const theme = useTheme();
 
   return (
     <Box sx={{ mb: 1 }}>
-      <Card 
+      <Card
         variant="outlined"
         sx={{
           display: 'inline-block',
@@ -37,20 +37,18 @@ const PlanMessageCard = ({
         onClick={onClick}
       >
         <CardContent sx={{ py: 1, px: 2, display: 'flex', alignItems: 'center', gap: 1, '&:last-child': { pb: 1 } }}>
-          <Typography sx={{ fontSize: '1rem' }}>📋</Typography>
-          <Typography 
-            variant="body2" 
-            sx={{ 
+          <Typography variant="body2"
+            sx={{
               color: isSelected ? 'success.contrastText' : 'text.primary',
               fontWeight: isSelected ? 700 : 500
             }}
           >
-            Plan
+            Workflow
           </Typography>
           {isSelected && (
-            <Chip 
-              label="Active" 
-              size="small" 
+            <Chip
+              label="Active"
+              size="small"
               color="success"
               variant="filled"
             />
@@ -61,4 +59,4 @@ const PlanMessageCard = ({
   );
 };
 
-export default PlanMessageCard;
+export default WorkflowMessageCard;

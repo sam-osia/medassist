@@ -1,7 +1,7 @@
-from core.workflow.schemas.plan_schema import Plan
+from core.workflow.schemas.workflow_schema import Workflow
 
-def print_plan(plan: Plan, indent=0):
-    """Format the plan as a string in a nice nested format"""
+def print_workflow(workflow: Workflow, indent=0):
+    """Format the workflow as a string in a nice nested format"""
     output_lines = []
     
     def format_step(step, indent_level):
@@ -54,9 +54,9 @@ def print_plan(plan: Plan, indent=0):
                 return f" {condition.operator} ".join(sub_conditions)
         return str(condition)
     
-    output_lines.append("=� Execution Plan:")
+    output_lines.append("=� Execution Workflow:")
     output_lines.append("=" * 50)
-    for i, step in enumerate(plan.steps):
+    for i, step in enumerate(workflow.steps):
         output_lines.append(f"\nStep {i+1}:")
         format_step(step, 1)
     output_lines.append("=" * 50)

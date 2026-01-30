@@ -88,6 +88,7 @@ def has_project_access(username: str, project_name: str) -> bool:
 def has_plan_access(username: str, plan_name: str) -> bool:
     """
     Check if a user has access to a specific plan.
+    LEGACY: Use has_workflow_def_access instead.
 
     Args:
         username: Username to check
@@ -108,6 +109,31 @@ def has_plan_access(username: str, plan_name: str) -> bool:
 
     # Check if user is the creator
     return username == plan.get('created_by')
+
+
+def has_workflow_def_access(username: str, workflow_name: str) -> bool:
+    """
+    Check if a user has access to a specific workflow definition.
+
+    Args:
+        username: Username to check
+        workflow_name: Name of the workflow definition
+
+    Returns:
+        True if user has access (admin or creator)
+    """
+    from core.dataloders import workflow_def_loader
+
+    # Admins have access to everything
+    if is_admin(username):
+        return True
+
+    workflow_def = workflow_def_loader._cache.get_workflow_def(workflow_name)
+    if not workflow_def:
+        return False
+
+    # Check if user is the creator
+    return username == workflow_def.get('created_by')
 
 
 def has_experiment_access(username: str, experiment_name: str) -> bool:

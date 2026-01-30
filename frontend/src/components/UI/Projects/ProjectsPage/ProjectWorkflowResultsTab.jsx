@@ -31,7 +31,7 @@ import {
   ChevronRight as ChevronRightIcon,
   Refresh as RefreshIcon
 } from '@mui/icons-material';
-import { planningService, workflowService, datasetsService } from '../../../../services/ApiService';
+import { workflowBuilderService, workflowService, datasetsService } from '../../../../services/ApiService';
 import PatientSelectionTable from '../PatientSelectionTable';
 import ExperimentResultsPatientTable from './ExperimentResultsPatientTable';
 
@@ -133,7 +133,7 @@ const ProjectWorkflowResultsTab = ({ project }) => {
 
   const fetchAvailableWorkflows = async () => {
     try {
-      const response = await planningService.getAllPlans();
+      const response = await workflowBuilderService.getAllSavedWorkflows();
       setAvailableWorkflows(response.data.plans || []);
     } catch (err) {
       console.error('Error fetching workflows:', err);

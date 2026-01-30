@@ -25,16 +25,16 @@ const ConversationSidebar = ({
   onSelectConversation,
   onNewConversation,
   onDeleteConversation,
-  plans,
-  selectedPlanName,
-  onSelectPlan,
-  onDeletePlan
+  savedWorkflows,
+  selectedWorkflowName,
+  onSelectSavedWorkflow,
+  onDeleteSavedWorkflow
 }) => {
   const theme = useTheme();
   const [conversationMenuAnchor, setConversationMenuAnchor] = useState(null);
-  const [planMenuAnchor, setPlanMenuAnchor] = useState(null);
+  const [workflowMenuAnchor, setWorkflowMenuAnchor] = useState(null);
   const [menuConversationId, setMenuConversationId] = useState(null);
-  const [menuPlanName, setMenuPlanName] = useState(null);
+  const [menuWorkflowName, setMenuWorkflowName] = useState(null);
 
   // Format date to relative time
   const formatDate = (dateString) => {
@@ -172,25 +172,25 @@ const ConversationSidebar = ({
           </List>
         )}
 
-        {/* Plans Section */}
+        {/* Saved Workflows Section */}
         <Box sx={{ borderTop: 1, borderColor: 'divider', mt: 0 }}>
           <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
             <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-              Plans
+              Saved Workflows
             </Typography>
           </Box>
 
-          {plans && plans.length === 0 ? (
+          {savedWorkflows && savedWorkflows.length === 0 ? (
             <Box sx={{ p: 2, textAlign: 'center' }}>
               <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                No plans saved yet
+                No workflows saved yet
               </Typography>
             </Box>
           ) : (
             <List sx={{ p: 0 }}>
-              {plans && plans.map((plan) => (
+              {savedWorkflows && savedWorkflows.map((workflow) => (
                 <ListItem
-                  key={plan.plan_name}
+                  key={workflow.workflow_name || workflow.plan_name}
                   disablePadding
                   secondaryAction={
                     <IconButton
@@ -198,8 +198,8 @@ const ConversationSidebar = ({
                       size="small"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setMenuPlanName(plan.plan_name);
-                        setPlanMenuAnchor(e.currentTarget);
+                        setMenuWorkflowName(workflow.workflow_name || workflow.plan_name);
+                        setWorkflowMenuAnchor(e.currentTarget);
                       }}
                       sx={{
                         opacity: 0.6,
@@ -217,8 +217,8 @@ const ConversationSidebar = ({
                   }}
                 >
                   <ListItemButton
-                    selected={selectedPlanName === plan.plan_name}
-                    onClick={() => onSelectPlan(plan.plan_name)}
+                    selected={selectedWorkflowName === (workflow.workflow_name || workflow.plan_name)}
+                    onClick={() => onSelectSavedWorkflow(workflow.workflow_name || workflow.plan_name)}
                     sx={{
                       py: 1.5,
                       pr: 6,
@@ -235,7 +235,7 @@ const ConversationSidebar = ({
                         <Typography
                           variant="body2"
                           sx={{
-                            fontWeight: selectedPlanName === plan.plan_name ? 600 : 400,
+                            fontWeight: selectedWorkflowName === (workflow.workflow_name || workflow.plan_name) ? 600 : 400,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
@@ -243,7 +243,7 @@ const ConversationSidebar = ({
                             mb: 0.5
                           }}
                         >
-                          {plan.plan_name}
+                          {workflow.workflow_name || workflow.plan_name}
                         </Typography>
                       }
                       secondary={
@@ -252,7 +252,7 @@ const ConversationSidebar = ({
                           color="text.secondary"
                           sx={{ fontSize: '0.7rem' }}
                         >
-                          {formatDate(plan.last_modified_date || plan.created_date)}
+                          {formatDate(workflow.last_modified_date || workflow.created_date)}
                         </Typography>
                       }
                     />
@@ -290,22 +290,22 @@ const ConversationSidebar = ({
         </MenuItem>
       </Menu>
 
-      {/* Plan Menu */}
+      {/* Saved Workflow Menu */}
       <Menu
-        anchorEl={planMenuAnchor}
-        open={Boolean(planMenuAnchor)}
+        anchorEl={workflowMenuAnchor}
+        open={Boolean(workflowMenuAnchor)}
         onClose={() => {
-          setPlanMenuAnchor(null);
-          setMenuPlanName(null);
+          setWorkflowMenuAnchor(null);
+          setMenuWorkflowName(null);
         }}
       >
         <MenuItem
           onClick={() => {
-            if (window.confirm(`Are you sure you want to delete the plan "${menuPlanName}"?`)) {
-              onDeletePlan(menuPlanName);
+            if (window.confirm(`Are you sure you want to delete the workflow "${menuWorkflowName}"?`)) {
+              onDeleteSavedWorkflow(menuWorkflowName);
             }
-            setPlanMenuAnchor(null);
-            setMenuPlanName(null);
+            setWorkflowMenuAnchor(null);
+            setMenuWorkflowName(null);
           }}
           sx={{
             color: 'error.main'

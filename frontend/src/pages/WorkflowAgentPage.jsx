@@ -27,12 +27,12 @@ import {
   Save as SaveIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
-import { planningService, conversationService, workflowAgentService } from '../services/ApiService';
-import StepComponent from '../components/UI/Planning/StepComponent';
-import PlanMessageCard from '../components/UI/Planning/PlanMessageCard';
-import ConversationSidebar from '../components/UI/Planning/ConversationSidebar';
-import GeneratedPlanPanel from '../components/UI/Planning/GeneratedPlanPanel';
-import { SavePlanDialog } from '../components/UI/Planning/PlanDialogs';
+import { workflowBuilderService, conversationService, workflowAgentService } from '../services/ApiService';
+import StepComponent from '../components/UI/Workflow/StepComponent';
+import WorkflowMessageCard from '../components/UI/Workflow/WorkflowMessageCard';
+import ConversationSidebar from '../components/UI/Workflow/ConversationSidebar';
+import GeneratedWorkflowPanel from '../components/UI/Workflow/GeneratedWorkflowPanel';
+import { SaveWorkflowDialog } from '../components/UI/Workflow/WorkflowDialogs';
 import { useTheme } from '@mui/material/styles';
 import ReactMarkdown from 'react-markdown';
 import { v4 as uuidv4 } from 'uuid';
@@ -115,7 +115,7 @@ const findStepById = (steps, stepId) => {
   return null;
 };
 
-const PlanningAgentPage = () => {
+const WorkflowAgentPage = () => {
   const theme = useTheme();
   const [prompt, setPrompt] = useState('');
   const [result, setResult] = useState(null);
@@ -128,27 +128,27 @@ const PlanningAgentPage = () => {
   const [conversations, setConversations] = useState([]);
   const [loadingConversations, setLoadingConversations] = useState(false);
 
-  // Plan management state
-  const [plans, setPlans] = useState([]);
-  const [selectedPlanName, setSelectedPlanName] = useState(null);
+  // Saved workflows management state
+  const [savedWorkflows, setSavedWorkflows] = useState([]);
+  const [selectedWorkflowName, setSelectedWorkflowName] = useState(null);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [saveDialogError, setSaveDialogError] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [updatingPlan, setUpdatingPlan] = useState(false);
+  const [updatingWorkflow, setUpdatingWorkflow] = useState(false);
   
   // Chat interface state
-  const [conversationHistory, setConversationHistory] = useState([]);
+  const [conversation, setConversation] = useState({ messages: [], workflows: {} });
   const [chatInput, setChatInput] = useState('');
 
   // Trace state for streaming display
   const [activeTrace, setActiveTrace] = useState([]);
 
-  // Selected message state - tracks which message is currently displayed
-  const [selectedMessageId, setSelectedMessageId] = useState(null);
+  // Selected workflow state - tracks which workflow is currently displayed
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState(null);
 
-  // Load plans and conversations on component mount
+  // Load saved workflows and conversations on component mount
   useEffect(() => {
-    fetchPlans();
+    fetchSavedWorkflows();
     fetchConversations();
   }, []);
 
@@ -161,12 +161,12 @@ const PlanningAgentPage = () => {
   }, [saveSuccess]);
 
 
-  const fetchPlans = async () => {
+  const fetchSavedWorkflows = async () => {
     try {
-      const response = await planningService.getAllPlans();
-      setPlans(response.data.plans || []);
+      const response = await workflowBuilderService.getAllSavedWorkflows();
+      setSavedWorkflows(response.data.plans || []);
     } catch (error) {
-      console.error('Error fetching plans:', error);
+      console.error('Error fetching saved workflows:', error);
     }
   };
 
@@ -188,31 +188,29 @@ const PlanningAgentPage = () => {
       const response = await conversationService.getConversation(convId);
 
       // Clear plan state when loading a conversation
-      setSelectedPlanName(null);
+      setSelectedWorkflowName(null);
 
       // Set conversation ID
       setConversationId(convId);
 
-      // Load messages
-      const normalizedHistory = (response.data.messages || []).map(ensureMessageId);
-      setConversationHistory(normalizedHistory);
+      // Load messages and workflows
+      const messages = (response.data.messages || []).map(ensureMessageId);
+      const workflows = response.data.workflows || {};
+      setConversation({ messages, workflows });
 
-      // Find last plan and display it
-      const planMessages = normalizedHistory.filter(msg => msg.type === 'plan');
-      if (planMessages.length > 0) {
-        const lastPlanMessage = planMessages[planMessages.length - 1];
-        setResult({
-          raw_plan: lastPlanMessage.planData.raw_plan
-        });
-        setSelectedMessageId(lastPlanMessage.id);
+      // Find last workflow reference and display it
+      const lastWorkflowMsg = [...messages].reverse().find(m => m.workflow_ref);
+      if (lastWorkflowMsg && workflows[lastWorkflowMsg.workflow_ref]) {
+        setSelectedWorkflowId(lastWorkflowMsg.workflow_ref);
+        setResult({ raw_workflow: workflows[lastWorkflowMsg.workflow_ref].raw_workflow });
       } else {
-        // Clear result if no plans in conversation
+        // Clear result if no workflows in conversation
         setResult(null);
-        setSelectedMessageId(null);
+        setSelectedWorkflowId(null);
       }
 
       // Extract original prompt from first user message
-      const firstUserMessage = normalizedHistory.find(msg => msg.type === 'user');
+      const firstUserMessage = messages.find(msg => msg.type === 'user');
       if (firstUserMessage) {
         setPrompt(firstUserMessage.content);
       } else {
@@ -233,14 +231,14 @@ const PlanningAgentPage = () => {
 
     // Reset all state
     setConversationId(newConversationId);
-    setSelectedPlanName(null);
+    setSelectedWorkflowName(null);
     setResult(null);
     setPrompt('');
     setError(null);
     setSaveSuccess(false);
-    setUpdatingPlan(false);
-    setSelectedMessageId(null);
-    setConversationHistory([]);
+    setUpdatingWorkflow(false);
+    setSelectedWorkflowId(null);
+    setConversation({ messages: [], workflows: {} });
     setChatInput('');
     setActiveTrace([]);
   };
@@ -264,51 +262,51 @@ const PlanningAgentPage = () => {
     }
   };
 
-  const handleSavePlan = () => {
+  const handleSaveWorkflow = () => {
     if (!result) return;
     setShowSaveDialog(true);
     setSaveDialogError(null);
   };
 
-  const handleSelectPlan = async (planName) => {
+  const handleSelectSavedWorkflow = async (workflowName) => {
     try {
       setLoading(true);
-      const response = await planningService.getPlan(planName);
+      const response = await workflowBuilderService.getSavedWorkflow(workflowName);
 
       // Clear conversation state
       setConversationId(null);
-      setConversationHistory([]);
-      setSelectedMessageId(null);
+      setConversation({ messages: [], workflows: {} });
+      setSelectedWorkflowId(null);
       setPrompt('');
 
       // Set plan state
-      setSelectedPlanName(planName);
+      setSelectedWorkflowName(workflowName);
       setResult({
-        raw_plan: response.data.raw_plan
+        raw_workflow: response.data.raw_workflow
       });
 
       setError(null);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Error loading plan');
+      setError(err.response?.data?.detail || 'Error loading workflow');
     } finally {
       setLoading(false);
     }
   };
 
 
-  const handleDeletePlan = async (planName) => {
+  const handleDeleteSavedWorkflow = async (workflowName) => {
     try {
-      await planningService.deletePlan(planName);
-      await fetchPlans();
+      await workflowBuilderService.deleteSavedWorkflow(workflowName);
+      await fetchSavedWorkflows();
 
       // Clear current plan if it was deleted
-      if (selectedPlanName === planName) {
-        setSelectedPlanName(null);
+      if (selectedWorkflowName === workflowName) {
+        setSelectedWorkflowName(null);
         setResult(null);
       }
     } catch (error) {
-      console.error('Error deleting plan:', error);
-      alert('Error deleting plan: ' + (error.response?.data?.detail || error.message));
+      console.error('Error deleting workflow:', error);
+      alert('Error deleting workflow: ' + (error.response?.data?.detail || error.message));
     }
   };
 
@@ -327,7 +325,7 @@ const PlanningAgentPage = () => {
     setAwaitingResponse(true);
     setError(null);
     setResult(null);
-    setSelectedPlanName(null); // Clear selected plan when generating new plan
+    setSelectedWorkflowName(null); // Clear selected plan when generating new plan
     setActiveTrace([]); // Reset trace
 
     // Initialize chat with the original prompt before starting generation
@@ -375,29 +373,35 @@ const PlanningAgentPage = () => {
               removeLoadingMessage();
 
               if (eventData.response_type === "text") {
-                addMessageToHistory({
+                addMessageToConversation({
                   type: 'assistant',
                   content: eventData.text,
                   trace: collectedTrace
                 });
               } else if (eventData.response_type === "workflow") {
-                setResult({ raw_plan: eventData.workflow_data.raw_plan });
-                addMessageToHistory({
+                const workflowId = eventData.workflow_id;
+                const workflowData = { raw_workflow: eventData.workflow_data.raw_workflow };
+
+                // Add workflow to workflows dict
+                addWorkflowToConversation(workflowId, workflowData);
+
+                // Add single assistant message with workflow_ref
+                addMessageToConversation({
                   type: 'assistant',
                   content: eventData.text,
+                  workflow_ref: workflowId,
                   trace: collectedTrace
                 });
-                addPlanToHistory(
-                  { raw_plan: eventData.workflow_data.raw_plan },
-                  eventData.text,
-                  collectedTrace
-                );
+
+                // Update display
+                setResult(workflowData);
+                setSelectedWorkflowId(workflowId);
               }
               setActiveTrace([]);
             } else if (eventData.event === 'error') {
               removeLoadingMessage();
               setError(eventData.message);
-              addMessageToHistory({
+              addMessageToConversation({
                 type: 'assistant',
                 content: `Error: ${eventData.message}`,
                 trace: eventData.partial_trace || collectedTrace
@@ -431,72 +435,75 @@ const PlanningAgentPage = () => {
     }
   };
 
-  const handlePlanUpdate = (updatedPlan) => {
+  const handleWorkflowUpdate = (updatedWorkflow) => {
     setResult(prevResult => ({
       ...prevResult,
-      raw_plan: updatedPlan.raw_plan
+      raw_workflow: updatedWorkflow.raw_workflow
     }));
   };
 
   const handleStepLoadingChange = (isLoading) => {
-    setUpdatingPlan(isLoading);
+    setUpdatingWorkflow(isLoading);
   };
 
   const handleStepEdit = async (stepId, originalSummary, requestedSummary) => {
     // Add user message to chat showing the step edit request
-    addMessageToHistory({
+    addMessageToConversation({
       type: 'user',
       content: `Change step with step ID of "${stepId}" from "${originalSummary}" to "${requestedSummary}"`
     });
 
     // Trigger plan updating overlay
-    setUpdatingPlan(true);
+    setUpdatingWorkflow(true);
 
     try {
-      const response = await planningService.editPlanStep(
+      const response = await workflowBuilderService.editWorkflowStep(
         prompt,
-        result.raw_plan,
+        result.raw_workflow,
         stepId,
         requestedSummary
       );
 
       if (response.status === 200) {
-        // Extract plan data from new response format
-        const planData = response.data.plan_data;
-        
-        // Update the plan with the new generated plan
-        setResult({
-          raw_plan: planData.raw_plan,
-          formatted_plan: planData.formatted_plan
-        });
+        // Extract workflow data from response format
+        const responseWorkflowData = response.data.plan_data;
 
-        // Add assistant response to chat
-        addMessageToHistory({
+        // Generate new workflow ID
+        const newWorkflowId = `workflow_v${Object.keys(conversation.workflows).length + 1}`;
+        const workflowData = { raw_workflow: responseWorkflowData.raw_workflow };
+
+        // Add workflow to workflows dict
+        addWorkflowToConversation(newWorkflowId, workflowData);
+
+        // Add assistant response with workflow_ref
+        addMessageToConversation({
           type: 'assistant',
-          content: response.data.message
+          content: response.data.message,
+          workflow_ref: newWorkflowId
         });
 
-        // Add plan object to chat
-        addPlanToHistory(planData, response.data.message);
+        // Update display
+        setResult(workflowData);
+        setSelectedWorkflowId(newWorkflowId);
       } else {
         throw new Error('Failed to update step');
       }
     } catch (err) {
       // Add error message to chat
-      addMessageToHistory({
+      addMessageToConversation({
         type: 'assistant',
         content: 'Error updating step: ' + (err.response?.data?.detail || err.message)
       });
     } finally {
-      setUpdatingPlan(false);
+      setUpdatingWorkflow(false);
     }
   };
 
   const handlePromptEdit = async (stepId, newPromptValue) => {
-    if (!result?.raw_plan) return;
+    if (!result?.raw_workflow) return;
 
     // Find the step to get its summary before making API call
-    const step = findStepById(result.raw_plan.steps, stepId);
+    const step = findStepById(result.raw_workflow.steps, stepId);
     if (!step) {
       throw new Error(`Step with ID '${stepId}' not found in plan`);
     }
@@ -504,41 +511,47 @@ const PlanningAgentPage = () => {
     const stepSummary = step.step_summary || 'Unknown step';
 
     try {
-      const response = await planningService.updateStepPrompt(
-        result.raw_plan,
+      const response = await workflowBuilderService.updateStepPrompt(
+        result.raw_workflow,
         stepId,
         newPromptValue
       );
 
       if (response.status === 200) {
-        const updatedPlanData = response.data;
+        const updatedWorkflowData = response.data;
 
         // If in plan-only mode, auto-save the entire plan
-        if (selectedPlanName) {
-          await planningService.savePlan(
-            selectedPlanName,
-            updatedPlanData.raw_plan
+        if (selectedWorkflowName) {
+          await workflowBuilderService.saveSavedWorkflow(
+            selectedWorkflowName,
+            updatedWorkflowData.raw_workflow
           );
         } else {
           // In conversation mode, add to history
           // Add user message to conversation history
-          addMessageToHistory({
+          addMessageToConversation({
             type: 'user',
             content: `Manually updated the prompt for step:\n${stepSummary}`
           });
 
-          // Create plan data object for conversation history
-          const planData = {
-            raw_plan: updatedPlanData.raw_plan
-          };
+          // Generate new workflow ID and add to conversation
+          const newWorkflowId = `workflow_v${Object.keys(conversation.workflows).length + 1}`;
+          const workflowData = { raw_workflow: updatedWorkflowData.raw_workflow };
 
-          // Add plan to conversation history
-          addPlanToHistory(planData, 'Plan updated');
+          addWorkflowToConversation(newWorkflowId, workflowData);
+
+          addMessageToConversation({
+            type: 'assistant',
+            content: 'Workflow updated',
+            workflow_ref: newWorkflowId
+          });
+
+          setSelectedWorkflowId(newWorkflowId);
         }
 
         // Update the result state
         setResult({
-          raw_plan: updatedPlanData.raw_plan
+          raw_workflow: updatedWorkflowData.raw_workflow
         });
       }
     } catch (err) {
@@ -549,36 +562,35 @@ const PlanningAgentPage = () => {
   };
 
   // Chat helper functions
-  const addMessageToHistory = (message) => {
+  const addMessageToConversation = (message) => {
     const newMessage = ensureMessageId({
       ...message,
       timestamp: new Date()
     });
-    setConversationHistory(prev => [...prev, newMessage]);
+    setConversation(prev => ({
+      ...prev,
+      messages: [...prev.messages, newMessage]
+    }));
+    return newMessage;
+  };
+
+  const addWorkflowToConversation = (workflowId, workflowData) => {
+    setConversation(prev => ({
+      ...prev,
+      workflows: {
+        ...prev.workflows,
+        [workflowId]: workflowData
+      }
+    }));
   };
 
   const initializeChat = (originalPrompt) => {
     if (originalPrompt && originalPrompt.trim()) {
-      addMessageToHistory({
+      addMessageToConversation({
         type: 'user',
         content: originalPrompt.trim()
       });
     }
-  };
-
-  // Add plan message to chat history
-  const addPlanToHistory = (planData, message = 'Plan generated', trace = []) => {
-    const planMessage = ensureMessageId({
-      type: 'plan',
-      planData: planData,
-      message: message,
-      trace: trace,
-      timestamp: new Date()
-    });
-    setConversationHistory(prev => [...prev, planMessage]);
-
-    // Set this plan as selected
-    setSelectedMessageId(planMessage.id);
   };
 
   // Loading message management
@@ -588,25 +600,30 @@ const PlanningAgentPage = () => {
       type: 'loading',
       timestamp: new Date()
     };
-    setConversationHistory(prev => [...prev, loadingMessage]);
+    setConversation(prev => ({
+      ...prev,
+      messages: [...prev.messages, loadingMessage]
+    }));
   };
 
   const removeLoadingMessage = () => {
-    setConversationHistory(prev => prev.filter(msg => msg.type !== 'loading'));
+    setConversation(prev => ({
+      ...prev,
+      messages: prev.messages.filter(msg => msg.type !== 'loading')
+    }));
   };
 
-  // Handle plan selection from chat
-  const handlePlanClick = (messageId) => {
-    // Find the message by its ID
-    const message = conversationHistory.find(m => m.id === messageId);
-    if (!message || message.type !== 'plan') return;
+  // Handle workflow selection from chat
+  const handleWorkflowClick = (workflowId) => {
+    const workflowData = conversation.workflows[workflowId];
+    if (!workflowData) return;
 
     // Update selection
-    setSelectedMessageId(messageId);
+    setSelectedWorkflowId(workflowId);
 
     // Update display
     setResult({
-      raw_plan: message.planData.raw_plan
+      raw_workflow: workflowData.raw_workflow
     });
   };
 
@@ -620,7 +637,7 @@ const PlanningAgentPage = () => {
     setActiveTrace([]); // Reset trace
 
     // Add user message to chat
-    addMessageToHistory({
+    addMessageToConversation({
       type: 'user',
       content: userMessage
     });
@@ -668,28 +685,34 @@ const PlanningAgentPage = () => {
               removeLoadingMessage();
 
               if (eventData.response_type === "text") {
-                addMessageToHistory({
+                addMessageToConversation({
                   type: 'assistant',
                   content: eventData.text,
                   trace: collectedTrace
                 });
               } else if (eventData.response_type === "workflow") {
-                setResult({ raw_plan: eventData.workflow_data.raw_plan });
-                addMessageToHistory({
+                const workflowId = eventData.workflow_id;
+                const workflowData = { raw_workflow: eventData.workflow_data.raw_workflow };
+
+                // Add workflow to workflows dict
+                addWorkflowToConversation(workflowId, workflowData);
+
+                // Add single assistant message with workflow_ref
+                addMessageToConversation({
                   type: 'assistant',
                   content: eventData.text,
+                  workflow_ref: workflowId,
                   trace: collectedTrace
                 });
-                addPlanToHistory(
-                  { raw_plan: eventData.workflow_data.raw_plan },
-                  eventData.text,
-                  collectedTrace
-                );
+
+                // Update display
+                setResult(workflowData);
+                setSelectedWorkflowId(workflowId);
               }
               setActiveTrace([]);
             } else if (eventData.event === 'error') {
               removeLoadingMessage();
-              addMessageToHistory({
+              addMessageToConversation({
                 type: 'assistant',
                 content: `Error: ${eventData.message}`,
                 trace: eventData.partial_trace || collectedTrace
@@ -710,7 +733,7 @@ const PlanningAgentPage = () => {
       removeLoadingMessage();
 
       // Add error message to chat
-      addMessageToHistory({
+      addMessageToConversation({
         type: 'assistant',
         content: 'Error: ' + (err.message || 'Unknown error')
       });
@@ -729,10 +752,10 @@ const PlanningAgentPage = () => {
         onSelectConversation={handleLoadConversation}
         onNewConversation={handleNewConversation}
         onDeleteConversation={handleDeleteConversation}
-        plans={plans}
-        selectedPlanName={selectedPlanName}
-        onSelectPlan={handleSelectPlan}
-        onDeletePlan={handleDeletePlan}
+        savedWorkflows={savedWorkflows}
+        selectedWorkflowName={selectedWorkflowName}
+        onSelectSavedWorkflow={handleSelectSavedWorkflow}
+        onDeleteSavedWorkflow={handleDeleteSavedWorkflow}
       />
 
       {/* Main content area */}
@@ -746,7 +769,7 @@ const PlanningAgentPage = () => {
         <Box sx={{ height: '100%', px: 3, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
 
           {/* Conditional Layout Based on View Mode */}
-        {selectedPlanName && result ? (
+        {selectedWorkflowName && result ? (
           /* Plan-Only Mode - Centered Plan Panel */
           <Box sx={{
             display: 'flex',
@@ -766,7 +789,7 @@ const PlanningAgentPage = () => {
             }}>
               {saveSuccess && (
                 <Alert severity="success">
-                  Plan saved successfully!
+                  Workflow saved successfully!
                 </Alert>
               )}
 
@@ -776,23 +799,23 @@ const PlanningAgentPage = () => {
                 </Alert>
               )}
 
-              <GeneratedPlanPanel
+              <GeneratedWorkflowPanel
                 result={result}
-                updatingPlan={updatingPlan}
+                updatingWorkflow={updatingWorkflow}
                 prompt={prompt}
-                onPlanUpdate={handlePlanUpdate}
+                onWorkflowUpdate={handleWorkflowUpdate}
                 onLoadingChange={handleStepLoadingChange}
                 onStepEdit={handleStepEdit}
                 onPromptEdit={handlePromptEdit}
                 allowStepEditing={false}
-                onSavePlan={handleSavePlan}
-                selectedPlanName={selectedPlanName}
+                onSaveWorkflow={handleSaveWorkflow}
+                selectedWorkflowName={selectedWorkflowName}
                 awaitingResponse={awaitingResponse}
                 loading={loading}
               />
             </Box>
           </Box>
-        ) : !result && !awaitingResponse && conversationHistory.length === 0 ? (
+        ) : !result && !awaitingResponse && conversation.messages.length === 0 ? (
           /* Centered State - No Plan Loaded */
           <Box sx={{
             display: 'flex',
@@ -855,7 +878,7 @@ const PlanningAgentPage = () => {
                 
                 {saveSuccess && (
                   <Alert severity="success" sx={{ mt: 3 }}>
-                    Plan saved successfully!
+                    Workflow saved successfully!
                   </Alert>
                 )}
 
@@ -886,7 +909,7 @@ const PlanningAgentPage = () => {
 
               {saveSuccess && (
                 <Alert severity="success" sx={{ mb: 3 }}>
-                  Plan saved successfully!
+                  Workflow saved successfully!
                 </Alert>
               )}
 
@@ -897,44 +920,27 @@ const PlanningAgentPage = () => {
               )}
 
               {/* Chat Interface */}
-              {(conversationHistory.length > 0 || (result?.raw_plan?.steps && !awaitingResponse)) && (
+              {(conversation.messages.length > 0 || (result?.raw_workflow?.steps && !awaitingResponse)) && (
                 <Card sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', maxHeight: '100%' }}>
                   <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', pb: 1 }}>
                     <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                       Planning Agent
+                       Workflow Agent
                     </Typography>
-                    
+
                     {/* Message History */}
-                    <Box 
-                      sx={{ 
-                        flex: 1, 
-                        overflowY: 'auto', 
-                        mb: 2, 
-                        display: 'flex', 
+                    <Box
+                      sx={{
+                        flex: 1,
+                        overflowY: 'auto',
+                        mb: 2,
+                        display: 'flex',
                         flexDirection: 'column',
                         gap: 1,
                         pr: 1,
                         minHeight: 0
                       }}
                     >
-                      {conversationHistory.map((message) => {
-                        if (message.type === 'plan') {
-                          return (
-                            <Box key={message.id}>
-                              {/* Display trace if present */}
-                              {message.trace && message.trace.length > 0 && (
-                                <TraceDisplay trace={message.trace} />
-                              )}
-                              <PlanMessageCard
-                                planData={message.planData}
-                                isSelected={selectedMessageId === message.id}
-                                onClick={() => handlePlanClick(message.id)}
-                                timestamp={message.timestamp}
-                              />
-                            </Box>
-                          );
-                        }
-
+                      {conversation.messages.map((message) => {
                         if (message.type === 'loading') {
                           return (
                             <Box key={message.id}>
@@ -985,6 +991,7 @@ const PlanningAgentPage = () => {
                             {message.type === 'assistant' && message.trace && message.trace.length > 0 && (
                               <TraceDisplay trace={message.trace} />
                             )}
+                            {/* Message bubble */}
                             <Box
                               sx={{
                                 display: 'flex',
@@ -1013,6 +1020,15 @@ const PlanningAgentPage = () => {
                                 </ReactMarkdown>
                               </Box>
                             </Box>
+                            {/* Workflow card if this message references one */}
+                            {message.workflow_ref && conversation.workflows[message.workflow_ref] && (
+                              <WorkflowMessageCard
+                                workflowData={conversation.workflows[message.workflow_ref]}
+                                isSelected={selectedWorkflowId === message.workflow_ref}
+                                onClick={() => handleWorkflowClick(message.workflow_ref)}
+                                timestamp={message.timestamp}
+                              />
+                            )}
                           </Box>
                         );
                       })}
@@ -1078,17 +1094,17 @@ const PlanningAgentPage = () => {
             </Box>
 
             {/* Right Column - Plan Display */}
-            <GeneratedPlanPanel
+            <GeneratedWorkflowPanel
               result={result}
-              updatingPlan={updatingPlan}
+              updatingWorkflow={updatingWorkflow}
               prompt={prompt}
-              onPlanUpdate={handlePlanUpdate}
+              onWorkflowUpdate={handleWorkflowUpdate}
               onLoadingChange={handleStepLoadingChange}
               onStepEdit={handleStepEdit}
               onPromptEdit={handlePromptEdit}
-              allowStepEditing={!selectedPlanName}
-              onSavePlan={handleSavePlan}
-              selectedPlanName={selectedPlanName}
+              allowStepEditing={!selectedWorkflowName}
+              onSaveWorkflow={handleSaveWorkflow}
+              selectedWorkflowName={selectedWorkflowName}
               awaitingResponse={awaitingResponse}
               loading={loading}
             />
@@ -1098,16 +1114,16 @@ const PlanningAgentPage = () => {
         </Box>
       </Box>
 
-      {/* Save Plan Dialog */}
-      <SavePlanDialog
+      {/* Save Workflow Dialog */}
+      <SaveWorkflowDialog
         open={showSaveDialog}
         onClose={() => setShowSaveDialog(false)}
         result={result}
-        availablePlans={plans}
+        availableSavedWorkflows={savedWorkflows}
         onSaveSuccess={() => {
           setSaveSuccess(true);
           setShowSaveDialog(false);
-          fetchPlans();
+          fetchSavedWorkflows();
         }}
         onError={(error) => setSaveDialogError(error)}
         error={saveDialogError}
@@ -1116,4 +1132,4 @@ const PlanningAgentPage = () => {
   );
 };
 
-export default PlanningAgentPage;
+export default WorkflowAgentPage;

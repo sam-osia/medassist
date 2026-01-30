@@ -3,8 +3,8 @@ from typing import Dict, Any, Optional
 
 from core.llm_provider import call
 from core.llm_provider.providers.base import ToolDefinition
-from core.workflow.planning.plan_generation_agent import GeneratePlan, GeneratePlanInput
-from core.workflow.planning.plan_editing_agent import EditPlan, EditPlanInput
+from core.deprecated.planning.plan_generation_agent import GeneratePlan, GeneratePlanInput
+from core.deprecated.planning.plan_editing_agent import EditPlan, EditPlanInput
 
 def get_input_model_for_tool(tool_name: str):
     """Map tool names to their corresponding Pydantic input model classes."""

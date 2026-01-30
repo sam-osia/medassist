@@ -23,26 +23,26 @@ import {
   Save as SaveIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
-import { planningService } from '../../../services/ApiService';
+import { workflowBuilderService } from '../../../services/ApiService';
 
-// Save Plan Dialog Component
-export const SavePlanDialog = ({ open, onClose, result, availablePlans, onSaveSuccess, onError, error }) => {
-  const [planName, setPlanName] = useState('');
-  const [selectedExistingPlan, setSelectedExistingPlan] = useState('');
+// Save Workflow Dialog Component
+export const SaveWorkflowDialog = ({ open, onClose, result, availableSavedWorkflows, onSaveSuccess, onError, error }) => {
+  const [workflowName, setWorkflowName] = useState('');
+  const [selectedExistingWorkflow, setSelectedExistingWorkflow] = useState('');
   const [saveMode, setSaveMode] = useState('new'); // 'new' or 'overwrite'
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
-    const finalPlanName = saveMode === 'new' ? planName : selectedExistingPlan;
+    const finalWorkflowName = saveMode === 'new' ? workflowName : selectedExistingWorkflow;
 
-    if (!finalPlanName.trim()) {
-      onError('Please enter a plan name or select an existing plan');
+    if (!finalWorkflowName.trim()) {
+      onError('Please enter a workflow name or select an existing workflow');
       return;
     }
 
-    // Validate plan name format
-    if (saveMode === 'new' && !finalPlanName.replace('_', '').replace('-', '').replace(/\s/g, '').match(/^[a-zA-Z0-9_-\s]+$/)) {
-      onError('Plan name can only contain letters, numbers, spaces, hyphens, and underscores');
+    // Validate workflow name format
+    if (saveMode === 'new' && !finalWorkflowName.replace('_', '').replace('-', '').replace(/\s/g, '').match(/^[a-zA-Z0-9_-\s]+$/)) {
+      onError('Workflow name can only contain letters, numbers, spaces, hyphens, and underscores');
       return;
     }
 
@@ -50,20 +50,20 @@ export const SavePlanDialog = ({ open, onClose, result, availablePlans, onSaveSu
     onError(null);
 
     try {
-      // Convert spaces to underscores for the actual plan name
-      const sanitizedPlanName = finalPlanName.trim().replace(/\s+/g, '_');
+      // Convert spaces to underscores for the actual workflow name
+      const sanitizedWorkflowName = finalWorkflowName.trim().replace(/\s+/g, '_');
 
-      await planningService.savePlan(
-        sanitizedPlanName,
-        result.raw_plan
+      await workflowBuilderService.saveSavedWorkflow(
+        sanitizedWorkflowName,
+        result.raw_workflow
       );
 
       onSaveSuccess();
-      setPlanName('');
-      setSelectedExistingPlan('');
+      setWorkflowName('');
+      setSelectedExistingWorkflow('');
       setSaveMode('new');
     } catch (err) {
-      onError(err.response?.data?.detail || 'Error saving plan');
+      onError(err.response?.data?.detail || 'Error saving workflow');
     } finally {
       setSaving(false);
     }
@@ -71,8 +71,8 @@ export const SavePlanDialog = ({ open, onClose, result, availablePlans, onSaveSu
 
   const handleClose = () => {
     if (saving) return;
-    setPlanName('');
-    setSelectedExistingPlan('');
+    setWorkflowName('');
+    setSelectedExistingWorkflow('');
     setSaveMode('new');
     onError(null);
     onClose();
@@ -80,7 +80,7 @@ export const SavePlanDialog = ({ open, onClose, result, availablePlans, onSaveSu
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Save Plan</DialogTitle>
+      <DialogTitle>Save Workflow</DialogTitle>
       <DialogContent>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -99,23 +99,23 @@ export const SavePlanDialog = ({ open, onClose, result, availablePlans, onSaveSu
                 checked={saveMode === 'new'}
                 onChange={(e) => setSaveMode(e.target.value)}
               />
-              <label htmlFor="save-new">Save as new plan</label>
+              <label htmlFor="save-new">Save as new workflow</label>
             </Box>
 
             {saveMode === 'new' && (
               <TextField
                 autoFocus
                 fullWidth
-                label="Plan Name"
-                value={planName}
-                onChange={(e) => setPlanName(e.target.value)}
-                placeholder="Enter plan name (e.g., Patient Analysis Workflow)"
+                label="Workflow Name"
+                value={workflowName}
+                onChange={(e) => setWorkflowName(e.target.value)}
+                placeholder="Enter workflow name (e.g., Patient Analysis Workflow)"
                 disabled={saving}
                 sx={{ ml: 3 }}
               />
             )}
 
-            {availablePlans.length > 0 && (
+            {availableSavedWorkflows && availableSavedWorkflows.length > 0 && (
               <>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <input
@@ -126,21 +126,21 @@ export const SavePlanDialog = ({ open, onClose, result, availablePlans, onSaveSu
                     checked={saveMode === 'overwrite'}
                     onChange={(e) => setSaveMode(e.target.value)}
                   />
-                  <label htmlFor="save-overwrite">Overwrite existing plan</label>
+                  <label htmlFor="save-overwrite">Overwrite existing workflow</label>
                 </Box>
 
                 {saveMode === 'overwrite' && (
                   <FormControl fullWidth sx={{ ml: 3 }}>
-                    <InputLabel>Select Plan to Overwrite</InputLabel>
+                    <InputLabel>Select Workflow to Overwrite</InputLabel>
                     <Select
-                      value={selectedExistingPlan}
-                      onChange={(e) => setSelectedExistingPlan(e.target.value)}
+                      value={selectedExistingWorkflow}
+                      onChange={(e) => setSelectedExistingWorkflow(e.target.value)}
                       disabled={saving}
-                      label="Select Plan to Overwrite"
+                      label="Select Workflow to Overwrite"
                     >
-                      {availablePlans.map((plan) => (
-                        <MenuItem key={plan.plan_name} value={plan.plan_name}>
-                          {plan.plan_name}
+                      {availableSavedWorkflows.map((workflow) => (
+                        <MenuItem key={workflow.workflow_name || workflow.plan_name} value={workflow.workflow_name || workflow.plan_name}>
+                          {workflow.workflow_name || workflow.plan_name}
                         </MenuItem>
                       ))}
                     </Select>
@@ -158,31 +158,31 @@ export const SavePlanDialog = ({ open, onClose, result, availablePlans, onSaveSu
         <Button
           onClick={handleSave}
           variant="contained"
-          disabled={saving || (!planName.trim() && saveMode === 'new') || (!selectedExistingPlan && saveMode === 'overwrite')}
+          disabled={saving || (!workflowName.trim() && saveMode === 'new') || (!selectedExistingWorkflow && saveMode === 'overwrite')}
           startIcon={saving ? <CircularProgress size={20} /> : <SaveIcon />}
         >
-          {saving ? 'Saving...' : 'Save Plan'}
+          {saving ? 'Saving...' : 'Save Workflow'}
         </Button>
       </DialogActions>
     </Dialog>
   );
 };
 
-// Load Plan Dialog Component
-export const LoadPlanDialog = ({ open, onClose, availablePlans, onLoadPlan, onDeletePlan, loading }) => {
+// Load Workflow Dialog Component
+export const LoadWorkflowDialog = ({ open, onClose, availableSavedWorkflows, onLoadWorkflow, onDeleteWorkflow, loading }) => {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Load Plan</DialogTitle>
+      <DialogTitle>Load Workflow</DialogTitle>
       <DialogContent>
-        {availablePlans.length === 0 ? (
+        {!availableSavedWorkflows || availableSavedWorkflows.length === 0 ? (
           <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-            No saved plans found
+            No saved workflows found
           </Typography>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
-            {availablePlans.map((plan) => (
+            {availableSavedWorkflows.map((workflow) => (
               <Card
-                key={plan.plan_name}
+                key={workflow.workflow_name || workflow.plan_name}
                 variant="outlined"
                 sx={{
                   cursor: 'pointer',
@@ -194,7 +194,7 @@ export const LoadPlanDialog = ({ open, onClose, availablePlans, onLoadPlan, onDe
                     boxShadow: 2
                   }
                 }}
-                onClick={() => onLoadPlan(plan.plan_name)}
+                onClick={() => onLoadWorkflow(workflow.workflow_name || workflow.plan_name)}
               >
                 <CardContent sx={{
                   display: 'flex',
@@ -212,24 +212,24 @@ export const LoadPlanDialog = ({ open, onClose, availablePlans, onLoadPlan, onDe
                         wordBreak: 'break-word'
                       }}
                     >
-                      {plan.plan_name}
+                      {workflow.workflow_name || workflow.plan_name}
                     </Typography>
                     <Typography
                       variant="caption"
                       color="text.secondary"
                       sx={{ display: 'block' }}
                     >
-                      Created: {new Date(plan.created_date).toLocaleDateString()}
+                      Created: {new Date(workflow.created_date).toLocaleDateString()}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 2 }}>
-                    <Tooltip title="Delete plan">
+                    <Tooltip title="Delete workflow">
                       <IconButton
                         size="small"
                         color="error"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onDeletePlan(plan.plan_name);
+                          onDeleteWorkflow(workflow.workflow_name || workflow.plan_name);
                         }}
                         disabled={loading}
                         sx={{
