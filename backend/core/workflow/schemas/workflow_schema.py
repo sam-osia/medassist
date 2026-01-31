@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, Literal, Union, Annotated
 from pydantic import BaseModel, Field, ConfigDict
-from core.workflow.schemas.output_schemas import OutputDefinitionSpec, OutputMapping
+from core.workflow.schemas.output_schemas import OutputDefinition, OutputMapping
 from core.workflow.schemas.tool_inputs import (
     GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput,
     HighlightPatientNoteInput, AnalyzeNoteWithSpanAndReasonInput,
@@ -72,16 +72,11 @@ class LoopStep(BaseStep):
     body: List[AdvancedSteps]
     output_dict: Optional[str] = None
 
-# class FlagVariableStep(BaseStep):
-#     type: Literal["flag_variable"] = "flag_variable"
-#     variable: str
-#     value: bool
-
 # Discriminated-union with the "type" field
 AllSteps = Union[ToolStep, IfStep, LoopStep]
 
 # ---------- The Workflow ----------
 class Workflow(BaseModel):
     steps: List[AllSteps]
-    output_definitions: List[OutputDefinitionSpec] = []
+    output_definitions: List[OutputDefinition] = []
     output_mappings: List[OutputMapping] = []

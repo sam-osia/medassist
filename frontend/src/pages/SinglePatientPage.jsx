@@ -751,6 +751,7 @@ const SinglePatientPage = () => {
                     csn={selectedCSN}
                     patientExperiments={patientExperiments}
                     initialExperiment={preselectedExperiment}
+                    encounterNotes={selectedEncounter?.notes || []}
                   />
                 )}
 

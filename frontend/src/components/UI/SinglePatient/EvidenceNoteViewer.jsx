@@ -15,18 +15,42 @@ import {
   Close as CloseIcon,
   Highlight as EvidenceIcon
 } from '@mui/icons-material';
-import { parseHighlightedText, hasHighlights } from '../../../utils/highlightParser';
+import { parseHighlightedText } from '../../../utils/highlightParser';
+
+// Client-side function to find span in text and wrap with highlight tags
+const highlightSpanInText = (text, spanText) => {
+  if (!text || !spanText) return text || '';
+
+  // Normalize whitespace for matching
+  const normalizedText = text.replace(/\s+/g, ' ').trim();
+  const normalizedSpan = spanText.replace(/\s+/g, ' ').trim();
+
+  // Case-insensitive search
+  const lowerText = normalizedText.toLowerCase();
+  const lowerSpan = normalizedSpan.toLowerCase();
+
+  const startIdx = lowerText.indexOf(lowerSpan);
+  if (startIdx === -1) {
+    // Span not found - return original text with span appended
+    return `${text}\n\n[Extracted span - not found verbatim in text]:\n${spanText}`;
+  }
+
+  const endIdx = startIdx + normalizedSpan.length;
+  return (
+    normalizedText.slice(0, startIdx) +
+    '<highlight>' + normalizedText.slice(startIdx, endIdx) + '</highlight>' +
+    normalizedText.slice(endIdx)
+  );
+};
 
 const EvidenceNoteViewer = ({ open, onClose, evidenceData }) => {
   if (!evidenceData) {
     return null;
   }
 
-  const { details } = evidenceData;
-  const highlightedText = details?.highlighted_text || '';
-  const criteriaName = details?.criteria_name || 'Unknown Criteria';
-  const reasoning = details?.reasoning || '';
-  
+  // New data structure: { noteText, noteMetadata, span, reasoning, criteria, criteriaName }
+  const { noteText, noteMetadata, span, reasoning, criteria, criteriaName } = evidenceData;
+
   const formatDateTime = (dateString) => {
     if (!dateString) return 'N/A';
     try {
@@ -35,6 +59,105 @@ const EvidenceNoteViewer = ({ open, onClose, evidenceData }) => {
       return dateString;
     }
   };
+
+  // Generate highlighted text client-side
+  const highlightedText = highlightSpanInText(noteText, span);
+  const hasNoteText = !!noteText;
+
+  // Fallback view when note text is not available
+  if (!hasNoteText && span) {
+    return (
+      <Dialog
+        open={open}
+        onClose={onClose}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: { minHeight: '300px', maxHeight: '60vh' }
+        }}
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+              <EvidenceIcon color="warning" />
+              <Typography variant="h6">
+                Evidence Details
+              </Typography>
+              <Chip
+                label={criteriaName || 'Unknown Criteria'}
+                size="small"
+                color="warning"
+                variant="outlined"
+              />
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              Note content unavailable
+            </Typography>
+          </Box>
+          <IconButton onClick={onClose} size="small">
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent dividers>
+          {/* Span Display */}
+          <Box sx={{
+            mb: 2,
+            p: 2,
+            backgroundColor: (theme) => alpha(theme.palette.warning.light, 0.3),
+            borderLeft: '4px solid',
+            borderColor: 'warning.main',
+            borderRadius: 1
+          }}>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'warning.dark', mb: 1 }}>
+              📍 Detected Span
+            </Typography>
+            <Typography
+              variant="body1"
+              sx={{
+                fontFamily: 'monospace',
+                whiteSpace: 'pre-wrap',
+                lineHeight: 1.6
+              }}
+            >
+              {span}
+            </Typography>
+          </Box>
+
+          {/* Reasoning Display */}
+          {reasoning && (
+            <Box sx={{
+              p: 2,
+              backgroundColor: 'action.hover',
+              borderRadius: 1,
+              border: '1px solid',
+              borderColor: 'divider'
+            }}>
+              <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
+                🧠 Reasoning
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: 'text.primary',
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: 1.5
+                }}
+              >
+                {reasoning}
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={onClose} variant="contained">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog
@@ -51,17 +174,17 @@ const EvidenceNoteViewer = ({ open, onClose, evidenceData }) => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
             <EvidenceIcon color="warning" />
             <Typography variant="h6">
-              Evidence Note - {details?.note_type || 'Unknown Type'}
+              Evidence Note - {noteMetadata?.note_type || 'Unknown Type'}
             </Typography>
-            <Chip 
-              label={criteriaName}
+            <Chip
+              label={criteriaName || 'Unknown Criteria'}
               size="small"
               color="warning"
               variant="outlined"
             />
           </Box>
           <Typography variant="body2" color="text.secondary">
-            Note ID: {details?.note_id || 'N/A'} | Author: {details?.author || 'N/A'}
+            Note ID: {noteMetadata?.note_id || 'N/A'} | Author: {noteMetadata?.author || 'N/A'}
           </Typography>
         </Box>
         <IconButton onClick={onClose} size="small">
@@ -69,13 +192,13 @@ const EvidenceNoteViewer = ({ open, onClose, evidenceData }) => {
         </IconButton>
       </DialogTitle>
 
-      <DialogContent 
-        dividers 
-        sx={{ 
-          height: 'calc(80vh - 120px)', // Account for header and actions
+      <DialogContent
+        dividers
+        sx={{
+          height: 'calc(80vh - 120px)',
           display: 'flex',
           flexDirection: 'column',
-          overflow: 'hidden' // Prevent main content scrolling
+          overflow: 'hidden'
         }}
       >
         {/* Detection Criteria and Evidence Status */}
@@ -89,11 +212,11 @@ const EvidenceNoteViewer = ({ open, onClose, evidenceData }) => {
           flexShrink: 0
         }}>
           <Typography variant="body2" color="text.secondary">
-            <strong>Detection Criteria:</strong> {details?.criteria || 'N/A'}
+            <strong>Detection Criteria:</strong> {criteria || 'N/A'}
           </Typography>
-          {highlightedText && (
+          {span && (
             <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'warning.dark', mt: 1 }}>
-              {hasHighlights(highlightedText) ? '📍 Evidence Found' : '📍 Evidence highlighting is missing from the text'}
+              📍 Evidence Found
             </Typography>
           )}
         </Box>
@@ -105,7 +228,7 @@ const EvidenceNoteViewer = ({ open, onClose, evidenceData }) => {
           borderColor: 'divider',
           borderRadius: 1,
           p: 2,
-          flex: 1, // Take remaining space
+          flex: 1,
           overflow: 'auto',
           mb: 2
         }}>
@@ -131,17 +254,17 @@ const EvidenceNoteViewer = ({ open, onClose, evidenceData }) => {
             borderRadius: 1,
             border: '1px solid',
             borderColor: 'divider',
-            flexShrink: 0 // Don't shrink this section
+            flexShrink: 0
           }}>
             <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}>
               🧠 Reasoning
             </Typography>
-            <Typography 
-              variant="body2" 
-              sx={{ 
+            <Typography
+              variant="body2"
+              sx={{
                 color: 'text.primary',
                 whiteSpace: 'pre-wrap',
-                lineHeight: 1.5 
+                lineHeight: 1.5
               }}
             >
               {reasoning}

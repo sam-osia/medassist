@@ -1,0 +1,212 @@
+{
+  "raw_workflow": {
+    "steps": [
+      {
+        "id": "fetch_note_ids",
+        "step_summary": "Retrieve all note IDs for the patient.",
+        "type": "tool",
+        "tool": "get_patient_notes_ids",
+        "inputs": {
+          "mrn": 0,
+          "csn": 0
+        },
+        "output": "note_ids"
+      },
+      {
+        "id": "loop_notes_analysis",
+        "step_summary": "Iterate over each note ID to analyze and summarize if depression signs are found.",
+        "type": "loop",
+        "for_var": "note_id",
+        "in_expr": "note_ids",
+        "body": [
+          {
+            "id": "read_note",
+            "step_summary": "Read the content of the current note.",
+            "type": "tool",
+            "tool": "read_patient_note",
+            "inputs": {
+              "mrn": 0,
+              "csn": 0,
+              "note_id": "{{ note_id }}"
+            },
+            "output": "note_content"
+          },
+          {
+            "id": "analyze_depression",
+            "step_summary": "Analyze the note for signs of depression, providing spans and reasoning.",
+            "type": "tool",
+            "tool": "analyze_note_with_span_and_reason",
+            "inputs": {
+              "note": "{{ note_content }}",
+              "prompt": {
+                "system_prompt": "You are an expert in clinical psychology and text analysis. Your task is to identify signs of depression in provided notes, marking the specific text spans that indicate these signs and providing reasoning to support your findings. Present your analysis clearly and concisely.",
+                "user_prompt": "Analyze the following note for signs of depression. Identify specific spans in the text that indicate depression and provide a detailed reasoning for your selection.\n\nNote:\n{{ note_content }}",
+                "examples": null
+              }
+            },
+            "output": "analysis_result"
+          },
+          {
+            "id": "check_depression_signs",
+            "step_summary": "Check if depression signs are identified in the analysis.",
+            "type": "if",
+            "condition": {
+              "type": "comparison",
+              "left": "{{ analysis_result.flag_state }}",
+              "operator": "==",
+              "right": true
+            },
+            "then": {
+              "id": "summarize_reasoning",
+              "step_summary": "Summarize the reasoning for identified depression signs.",
+              "type": "tool",
+              "tool": "summarize_patient_note",
+              "inputs": {
+                "note": "{{ analysis_result.reasoning }}",
+                "criteria": null
+              },
+              "output": "summary_output"
+            }
+          }
+        ],
+        "output_dict": "analysis_results"
+      }
+    ],
+    "output_definitions": [
+      {
+        "id": "def_depression_analysis_summary",
+        "name": "depression_analysis_summary",
+        "label": "Depression Analysis Summary",
+        "description": "Summarized reasoning for signs of depression found in patient notes.",
+        "output_type": "aggregated",
+        "output_fields": [
+          {
+            "name": "note_id",
+            "type": "text",
+            "description": "The ID of the note analyzed."
+          },
+          {
+            "name": "reasoning_summary",
+            "type": "text",
+            "description": "Summarized reasoning for identified signs of depression."
+          }
+        ],
+        "evidence_schema": {
+          "type": "aggregated",
+          "sources": [
+            {
+              "resource_type": "note",
+              "role": "trigger",
+              "fields": [
+                {
+                  "name": "note_id",
+                  "type": "text",
+                  "description": "The ID of the note."
+                }
+              ]
+            },
+            {
+              "resource_type": "note",
+              "role": "source",
+              "fields": [
+                {
+                  "name": "reasoning",
+                  "type": "text",
+                  "description": "The reasoning for the depression signs."
+                }
+              ]
+            },
+            {
+              "resource_type": "note",
+              "role": "context",
+              "fields": [
+                {
+                  "name": "content",
+                  "type": "text",
+                  "description": "The content of the note."
+                }
+              ]
+            },
+            {
+              "resource_type": "note",
+              "role": "context",
+              "fields": [
+                {
+                  "name": "analysis",
+                  "type": "text",
+                  "description": "The analysis result of the note."
+                }
+              ]
+            },
+            {
+              "resource_type": "note",
+              "role": "source",
+              "fields": [
+                {
+                  "name": "summary",
+                  "type": "text",
+                  "description": "The summarized reasoning for depression signs."
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "output_mappings": [
+      {
+        "output_definition_id": "def_depression_analysis_summary",
+        "value_sources": [
+          {
+            "output_field": "note_id",
+            "variable_path": "note_id"
+          },
+          {
+            "output_field": "reasoning_summary",
+            "variable_path": "summary_output"
+          }
+        ],
+        "evidence_sources": [
+          {
+            "step_id": "read_note",
+            "resource_type": "note",
+            "role": "trigger",
+            "field_bindings": [
+              {
+                "field_name": "note_id",
+                "variable_path": "note_id"
+              }
+            ]
+          },
+          {
+            "step_id": "analyze_depression",
+            "resource_type": "note",
+            "role": "context",
+            "field_bindings": [
+              {
+                "field_name": "analysis",
+                "variable_path": "analysis_result"
+              }
+            ]
+          },
+          {
+            "step_id": "summarize_reasoning",
+            "resource_type": "note",
+            "role": "source",
+            "field_bindings": [
+              {
+                "field_name": "summary",
+                "variable_path": "summary_output"
+              }
+            ]
+          }
+        ],
+        "condition": "analysis_result.flag_state == true"
+      }
+    ]
+  },
+  "created_by": "sam.osia",
+  "workflow_name": "save_test",
+  "last_modified_date": "2026-01-30T21:21:13.601330",
+  "created_date": "2026-01-30T21:21:13.601330"
+}

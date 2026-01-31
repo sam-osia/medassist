@@ -120,7 +120,8 @@ export function groupResultsByFlag(data, mrn, csn) {
       grouped[name].sources.push({
         type: resourceTypeName,
         resource_id: v.resource_id,
-        details: v.metadata?.resource_details || v.values
+        values: v.values,
+        metadata: v.metadata
       });
     }
   }

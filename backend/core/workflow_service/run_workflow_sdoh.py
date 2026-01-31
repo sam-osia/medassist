@@ -1,6 +1,5 @@
 import json
 import logging
-import re
 from typing import List, Dict
 
 from core.workflow.tools.notes import (
@@ -17,51 +16,6 @@ from core.workflow_service.utils import (
 
 logger = logging.getLogger(__name__)
 DATASET = 'sdoh_parsed'
-
-
-def clean_text(text: str) -> str:
-    """
-    Normalize whitespace in a text string:
-    - Collapse multiple spaces/tabs/newlines into one space
-    - Strip leading/trailing spaces
-    """
-    return re.sub(r'\s+', ' ', text).strip()
-
-
-def find_span_in_text(note_text, span_text):
-    """Find span in note text case-insensitively, return original case indices"""
-    if not note_text or not span_text:
-        return None, None, note_text or ""
-
-    clean_note = clean_text(str(note_text))
-    clean_span = clean_text(str(span_text))
-
-    # Case-insensitive search
-    lower_note = clean_note.lower()
-    lower_span = clean_span.lower()
-
-    start_idx = lower_note.find(lower_span)
-    if start_idx != -1:
-        end_idx = start_idx + len(clean_span)
-        return start_idx, end_idx, clean_note
-    return None, None, clean_note
-
-
-def create_highlighted_text(note_text, span_text):
-    """Create highlighted text matching IdentifyFlag tool behavior"""
-    start_idx, end_idx, clean_note = find_span_in_text(note_text, span_text)
-
-    if start_idx is not None:
-        # Span found - highlight it in the full note
-        highlighted_note = (
-                clean_note[:start_idx] +
-                f"<highlight>{clean_note[start_idx:end_idx]}</highlight>" +
-                clean_note[end_idx:]
-        )
-        return highlighted_note
-    else:
-        # Span not found - include original note + span
-        return f"{clean_note}\n\nSpan:\n{span_text}"
 
 
 # Configuration for flag detection criteria that are based on notes
@@ -118,8 +72,7 @@ def _build_output_definitions() -> Dict[str, dict]:
             fields=[
                 {"name": "detected", "type": FIELD_TYPE_BOOLEAN},
                 {"name": "span", "type": FIELD_TYPE_TEXT},
-                {"name": "reasoning", "type": FIELD_TYPE_TEXT},
-                {"name": "highlighted_text", "type": FIELD_TYPE_TEXT}
+                {"name": "reasoning", "type": FIELD_TYPE_TEXT}
             ],
             metadata={"criteria": criteria_config["criteria"]}
         )
@@ -146,8 +99,6 @@ def analyze_single_note_for_flag(note_text, note_dict, criteria_config, mrn, csn
     if not flag_result.flag_state:
         return None
 
-    highlighted_text = create_highlighted_text(note_text, flag_result.span)
-
     # Create output value entry
     return create_output_value(
         output_definition_id=definition["id"],
@@ -155,8 +106,7 @@ def analyze_single_note_for_flag(note_text, note_dict, criteria_config, mrn, csn
         values={
             "detected": True,
             "span": flag_result.span,
-            "reasoning": flag_result.reasoning,
-            "highlighted_text": highlighted_text
+            "reasoning": flag_result.reasoning
         },
         metadata={
             "patient_id": str(mrn),
@@ -189,8 +139,6 @@ def analyze_notes(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
                     inputs=ReadPatientNoteInput(mrn=mrn, csn=csn, note_id=note_id))
                 note_dict = json.loads(note_json_string)
                 note_text = note_dict.get('note_text', '')
-
-                note_text = clean_text(note_text)
 
                 if not note_text or note_text.strip() == '':
                     continue

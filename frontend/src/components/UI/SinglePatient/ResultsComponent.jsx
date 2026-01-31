@@ -51,10 +51,11 @@ const preventChipInteraction = (event) => {
 };
 
 // Evidence row components that replicate the table structures from other components
-const DiagnosisEvidenceRow = ({ diagnosis }) => {
+const DiagnosisEvidenceRow = ({ evidence }) => {
+  const diagnosis = evidence.metadata?.resource_details || {};
   return (
     <TableRow sx={{ backgroundColor: (theme) => alpha(theme.palette.warning.light, 0.3), '&:hover': { backgroundColor: (theme) => alpha(theme.palette.warning.main, 0.4) } }}>
-      <TableCell>{diagnosis.diagnosis_id || 'N/A'}</TableCell>
+      <TableCell>{diagnosis.diagnosis_id || evidence.resource_id || 'N/A'}</TableCell>
       <TableCell>
         <Typography variant="body2" sx={{ maxWidth: 200 }}>
           {diagnosis.diagnosis_name || 'N/A'}
@@ -82,11 +83,11 @@ const DiagnosisEvidenceRow = ({ diagnosis }) => {
   );
 };
 
-const MedicationEvidenceRow = ({ medication }) => {
-
+const MedicationEvidenceRow = ({ evidence }) => {
+  const medication = evidence.metadata?.resource_details || {};
   return (
     <TableRow sx={{ backgroundColor: (theme) => alpha(theme.palette.warning.light, 0.3), '&:hover': { backgroundColor: (theme) => alpha(theme.palette.warning.main, 0.4) } }}>
-      <TableCell>{medication.order_id || 'N/A'}</TableCell>
+      <TableCell>{medication.order_id || evidence.resource_id || 'N/A'}</TableCell>
       <TableCell>
         <Typography variant="body2" sx={{ maxWidth: 200 }}>
           {medication.medication_name || medication.order_display_name || 'N/A'}
@@ -130,11 +131,12 @@ const MedicationEvidenceRow = ({ medication }) => {
 };
 
 const NoteEvidenceRow = ({ evidenceSource, onViewEvidence }) => {
-  const note = evidenceSource.details;
+  // Note metadata is now in metadata.resource_details
+  const note = evidenceSource.metadata?.resource_details || {};
 
   return (
     <TableRow sx={{ backgroundColor: (theme) => alpha(theme.palette.warning.light, 0.3), '&:hover': { backgroundColor: (theme) => alpha(theme.palette.warning.main, 0.4) } }}>
-      <TableCell>{note.note_id || 'N/A'}</TableCell>
+      <TableCell>{note.note_id || evidenceSource.resource_id || 'N/A'}</TableCell>
       <TableCell>
         <Typography variant="body2">
           {note.note_type || 'N/A'}
@@ -173,9 +175,10 @@ const NoteEvidenceRow = ({ evidenceSource, onViewEvidence }) => {
   );
 };
 
-const FlowsheetEvidenceRow = ({ flowsheetData }) => {
-  const instance = flowsheetData.flowsheet_instance;
-  const analysisInputs = flowsheetData.analysis_inputs;
+const FlowsheetEvidenceRow = ({ evidence }) => {
+  const flowsheetData = evidence.metadata?.resource_details || {};
+  const instance = flowsheetData.flowsheet_instance || {};
+  const analysisInputs = flowsheetData.analysis_inputs || {};
   
   // Find CAPD score if available
   const capdScore = Object.values(instance.measurements || {}).find(
@@ -288,13 +291,13 @@ const EvidenceTable = ({ evidenceList, evidenceType, onViewEvidence }) => {
   const renderEvidenceRow = (evidence, index) => {
     switch (evidenceType) {
       case 'diagnosis':
-        return <DiagnosisEvidenceRow key={index} diagnosis={evidence.details} />;
+        return <DiagnosisEvidenceRow key={index} evidence={evidence} />;
       case 'medications':
-        return <MedicationEvidenceRow key={index} medication={evidence.details} />;
+        return <MedicationEvidenceRow key={index} evidence={evidence} />;
       case 'note':
         return <NoteEvidenceRow key={index} evidenceSource={evidence} onViewEvidence={onViewEvidence} />;
       case 'flowsheet':
-        return <FlowsheetEvidenceRow key={index} flowsheetData={evidence.details} />;
+        return <FlowsheetEvidenceRow key={index} evidence={evidence} />;
       default:
         return null;
     }
@@ -419,12 +422,17 @@ const FlagRow = ({ flagName, flagData, onViewEvidence }) => {
   );
 };
 
-const ResultsComponent = ({ workflowResults, mrn, csn, patientExperiments = [], initialExperiment }) => {
+const ResultsComponent = ({ workflowResults, mrn, csn, patientExperiments = [], initialExperiment, encounterNotes = [] }) => {
   const [selectedEvidence, setSelectedEvidence] = useState(null);
   const [evidenceViewerOpen, setEvidenceViewerOpen] = useState(false);
   const [selectedExperiment, setSelectedExperiment] = useState(initialExperiment || 'current');
   const [experimentResults, setExperimentResults] = useState(null);
   const [displayedResults, setDisplayedResults] = useState(null);
+
+  // Lookup note by ID from encounter notes
+  const lookupNote = (noteId) => {
+    return encounterNotes.find(n => String(n.note_id) === String(noteId));
+  };
 
   // Update displayed results when workflowResults or selectedExperiment changes
   useEffect(() => {
@@ -480,7 +488,22 @@ const ResultsComponent = ({ workflowResults, mrn, csn, patientExperiments = [], 
   };
   
   const handleViewEvidence = (evidenceSource) => {
-    setSelectedEvidence(evidenceSource);
+    const { values, metadata, resource_id } = evidenceSource;
+
+    // Look up note from encounter data
+    const note = lookupNote(resource_id);
+
+    // Combine into resolved evidence data
+    const resolvedEvidence = {
+      noteText: note?.note_text || '',
+      noteMetadata: note || metadata?.resource_details || {},
+      span: values?.span || '',
+      reasoning: values?.reasoning || '',
+      criteria: metadata?.criteria || '',
+      criteriaName: metadata?.criteria_name || ''
+    };
+
+    setSelectedEvidence(resolvedEvidence);
     setEvidenceViewerOpen(true);
   };
   
