@@ -11,6 +11,7 @@ from uuid import uuid4
 from core.workflow.orchestrator import WorkflowOrchestrator
 from core.workflow.state import WorkflowAgentState
 from core.workflow.schemas.workflow_schema import Workflow
+from core.workflow.trace_recorder import TraceRecorder
 from core.dataloders.conversation_loader import (
     save_conversation, get_conversation, list_conversations,
     delete_conversation, conversation_exists
@@ -51,15 +52,22 @@ def state_from_stored_messages(conv_data: dict, mrn: int, csn: int) -> WorkflowA
     return state
 
 
+def count_user_messages(conv_data: dict) -> int:
+    """Count the number of user messages in a conversation."""
+    messages = conv_data.get("messages", [])
+    return sum(1 for msg in messages if msg.get('type') == 'user')
+
+
 def state_to_stored_messages_with_trace(
     state: WorkflowAgentState,
     trace: List[Dict[str, Any]],
-    error_message: Optional[str] = None
+    error_message: Optional[str] = None,
+    cost_info: Optional[Dict[str, Any]] = None
 ) -> dict:
     """Convert WorkflowAgentState to storage format.
 
     Returns dict with 'messages' and 'workflows' keys.
-    Trace is attached to the final assistant message.
+    Trace and cost info are attached to the final assistant message.
     """
     messages = []
     conversation_len = len(state.conversation)
@@ -78,26 +86,36 @@ def state_to_stored_messages_with_trace(
         if entry.workflow_ref:
             msg["workflow_ref"] = entry.workflow_ref
 
-        # Attach trace to final assistant message
-        if is_last and entry.role == "assistant" and trace:
-            msg["trace"] = trace
+        # Attach trace and cost to final assistant message
+        if is_last and entry.role == "assistant":
+            if trace:
+                msg["trace"] = trace
+            if cost_info:
+                msg["cost"] = cost_info.get("cost", 0.0)
+                msg["input_tokens"] = cost_info.get("input_tokens", 0)
+                msg["output_tokens"] = cost_info.get("output_tokens", 0)
 
         messages.append(msg)
 
     # If error occurred, add error message with trace
     if error_message:
-        messages.append({
+        error_msg = {
             "id": str(uuid4()),
             "type": "assistant",
             "content": f"Error: {error_message}",
             "trace": trace,
             "timestamp": datetime.datetime.now().isoformat()
-        })
+        }
+        if cost_info:
+            error_msg["cost"] = cost_info.get("cost", 0.0)
+            error_msg["input_tokens"] = cost_info.get("input_tokens", 0)
+            error_msg["output_tokens"] = cost_info.get("output_tokens", 0)
+        messages.append(error_msg)
 
     # Build workflows dict from state.workflow_history
     workflows = {}
     for workflow_id, workflow in state.workflow_history.items():
-        workflows[workflow_id] = {"raw_workflow": workflow.model_dump()}
+        workflows[workflow_id] = {"raw_workflow": workflow.model_dump(by_alias=True)}
 
     return {"messages": messages, "workflows": workflows}
 
@@ -127,15 +145,24 @@ async def process_message_stream(data: Dict[str, Any] = Body(...), current_user:
     else:
         conv_data = {"messages": [], "workflows": {}}
 
+    # Calculate turn number (count of user messages + 1 for this new message)
+    turn_number = count_user_messages(conv_data) + 1
+
     # Convert to state
     state = state_from_stored_messages(conv_data, mrn, csn)
 
+    # Create trace recorder
+    trace_recorder = None
+    if conversation_id:
+        trace_recorder = TraceRecorder(conversation_id, turn_number)
+        logger.info(f"Trace recording for conversation {conversation_id}, turn {turn_number}")
+
     async def event_generator():
-        trace = []  # Collect trace events for persistence
+        trace = []  # Collect trace events for persistence (lightweight)
         orchestrator = WorkflowOrchestrator(dataset=dataset)
 
         try:
-            for event in orchestrator.process_message_streaming(user_message, state):
+            for event in orchestrator.process_message_streaming(user_message, state, trace_recorder=trace_recorder):
                 # Convert event to stream format
                 if event.type == "decision":
                     event_data = {
@@ -155,7 +182,10 @@ async def process_message_stream(data: Dict[str, Any] = Body(...), current_user:
                         "success": event.success,
                         "summary": event.summary,
                         "duration_ms": event.duration_ms,
-                        "timestamp": event.timestamp.isoformat()
+                        "timestamp": event.timestamp.isoformat(),
+                        "cost": event.cost,
+                        "input_tokens": event.input_tokens,
+                        "output_tokens": event.output_tokens
                     }
                     trace.append(event_data)
                     yield json.dumps(event_data) + "\n"
@@ -163,22 +193,44 @@ async def process_message_stream(data: Dict[str, Any] = Body(...), current_user:
                 elif event.type == "final":
                     result = event.result
 
-                    # Convert state back to messages for storage with trace
-                    updated_messages = state_to_stored_messages_with_trace(state, trace)
+                    # Extract cost info for storage
+                    cost_info = {
+                        "cost": result.get("total_cost", 0.0),
+                        "input_tokens": result.get("total_input_tokens", 0),
+                        "output_tokens": result.get("total_output_tokens", 0)
+                    }
 
-                    # Save conversation
+                    # Convert state back to messages for storage with trace and cost
+                    updated_messages = state_to_stored_messages_with_trace(state, trace, cost_info=cost_info)
+
+                    # Save conversation and get cumulative totals
+                    cumulative_totals = {
+                        "total_cost": result.get("total_cost", 0.0),
+                        "total_input_tokens": result.get("total_input_tokens", 0),
+                        "total_output_tokens": result.get("total_output_tokens", 0)
+                    }
+
                     if conversation_id:
-                        save_conversation(conversation_id, updated_messages, current_user)
+                        save_result = save_conversation(conversation_id, updated_messages, current_user)
+                        if save_result.get("success"):
+                            cumulative_totals = {
+                                "total_cost": save_result["total_cost"],
+                                "total_input_tokens": save_result["total_input_tokens"],
+                                "total_output_tokens": save_result["total_output_tokens"]
+                            }
 
-                    # Yield final event
+                    # Yield final event with cumulative cost totals
                     final_data = {
                         "event": "final",
                         "response_type": result["response_type"],
                         "text": result["text"],
+                        "total_cost": cumulative_totals["total_cost"],
+                        "total_input_tokens": cumulative_totals["total_input_tokens"],
+                        "total_output_tokens": cumulative_totals["total_output_tokens"]
                     }
                     if result["response_type"] == "workflow" and result.get("workflow"):
                         final_data["workflow_data"] = {
-                            "raw_workflow": result["workflow"].model_dump()
+                            "raw_workflow": result["workflow"].model_dump(by_alias=True)
                         }
                         final_data["workflow_id"] = result.get("workflow_id")
                     yield json.dumps(final_data) + "\n"
@@ -191,10 +243,10 @@ async def process_message_stream(data: Dict[str, Any] = Body(...), current_user:
                 "partial_trace": trace
             }
 
-            # Save error state with partial trace
+            # Save error state with partial trace (no cost info available on error)
             if conversation_id:
                 error_messages = state_to_stored_messages_with_trace(
-                    state, trace, error_message=str(e)
+                    state, trace, error_message=str(e), cost_info=None
                 )
                 save_conversation(conversation_id, error_messages, current_user)
 
@@ -248,7 +300,10 @@ def get_saved_conversation(conversation_id: str, current_user: str = Depends(get
             "workflows": conversation_data.get("workflows", {}),
             "created_date": conversation_data.get("created_date"),
             "last_message_date": conversation_data.get("last_message_date"),
-            "title": conversation_data.get("title", "Untitled Conversation")
+            "title": conversation_data.get("title", "Untitled Conversation"),
+            "total_cost": conversation_data.get("total_cost", 0.0),
+            "total_input_tokens": conversation_data.get("total_input_tokens", 0),
+            "total_output_tokens": conversation_data.get("total_output_tokens", 0)
         }
 
     except HTTPException:

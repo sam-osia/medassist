@@ -50,7 +50,7 @@ Guidelines:
         """Generate a summary of the workflow."""
         logger.info(f"[{self.name}] called")
         try:
-            workflow_str = inputs.workflow.model_dump_json(indent=2)
+            workflow_str = inputs.workflow.model_dump_json(indent=2, by_alias=True)
 
             system_prompt = f"""{self._prompt}
 
@@ -70,11 +70,21 @@ Generate a clear, concise summary of this workflow."""
 
             if result.parsed:
                 logger.info(f"[{self.name}] success - summary length: {len(result.parsed.summary)}")
-                return SummarizerOutput(summary=result.parsed.summary)
+                return SummarizerOutput(
+                    summary=result.parsed.summary,
+                    cost=result.cost,
+                    input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens
+                )
             else:
                 # Fallback: use raw content
                 logger.warning(f"[{self.name}] using fallback content")
-                return SummarizerOutput(summary=result.content or "Workflow summary unavailable.")
+                return SummarizerOutput(
+                    summary=result.content or "Workflow summary unavailable.",
+                    cost=result.cost,
+                    input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens
+                )
 
         except Exception as e:
             logger.error(f"[{self.name}] error: {e}")

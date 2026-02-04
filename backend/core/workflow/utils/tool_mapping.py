@@ -21,8 +21,7 @@ def get_data_item_from_tool(tool_name, tool_args):
     # Map tool names to data types
     tool_data_type_map = {
         'read_patient_note': 'notes',
-        'summarize_patient_note': 'notes', 
-        'highlight_patient_note': 'notes',
+        'summarize_patient_note': 'notes',
         'read_medication': 'medications',
         'read_diagnosis': 'diagnoses',
         'analyze_flowsheet_instance': 'flowsheets'
@@ -70,7 +69,6 @@ def should_use_data_item_events(tool_name):
     data_item_tools = {
         'read_patient_note',
         'summarize_patient_note',
-        'highlight_patient_note', 
         'read_medication',
         'read_diagnosis',
         'analyze_flowsheet_instance'

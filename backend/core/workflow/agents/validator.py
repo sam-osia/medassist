@@ -48,16 +48,24 @@ class ValidatorAgent(BaseAgent):
             return ValidatorOutput(
                 valid=False,
                 broken_step_id=result[1],
-                broken_reason=result[2]
+                broken_reason=result[2],
+                cost=0.0,
+                input_tokens=0,
+                output_tokens=0
             )
 
         # Skip output definition validation for now - always pass
         # TODO: Re-enable when LLM generates consistent variable paths
-        # if workflow.output_definitions:
-        #     output_result = self._validate_outputs(...)
+        if workflow.output_definitions:
+            logger.warning(f"[{self.name}] skipping output definition validation (TODO: re-enable)")
 
         logger.info(f"[{self.name}] valid=True")
-        return ValidatorOutput(valid=True)
+        return ValidatorOutput(
+            valid=True,
+            cost=0.0,
+            input_tokens=0,
+            output_tokens=0
+        )
 
     def _validate_steps(
         self,

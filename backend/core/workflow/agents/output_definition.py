@@ -43,7 +43,7 @@ Keep the original steps unchanged - only add output_definitions and output_mappi
     def run(self, inputs: OutputDefinitionInput) -> OutputDefinitionOutput:
         logger.info(f"[{self.name}] called")
         try:
-            workflow_json = inputs.workflow.model_dump_json(indent=2)
+            workflow_json = inputs.workflow.model_dump_json(indent=2, by_alias=True)
 
             system_prompt = f"""{self._prompt}
 
@@ -69,10 +69,22 @@ Keep all existing steps exactly as they are."""
             if result.parsed:
                 def_count = len(result.parsed.output_definitions) if result.parsed.output_definitions else 0
                 logger.info(f"[{self.name}] success - generated {def_count} definitions")
-                return OutputDefinitionOutput(workflow=result.parsed, success=True)
+                return OutputDefinitionOutput(
+                    workflow=result.parsed,
+                    success=True,
+                    cost=result.cost,
+                    input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens
+                )
             else:
                 logger.warning(f"[{self.name}] failed to parse response")
-                return OutputDefinitionOutput(success=False, error_message="Failed to parse response")
+                return OutputDefinitionOutput(
+                    success=False,
+                    error_message="Failed to parse response",
+                    cost=result.cost,
+                    input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens
+                )
 
         except Exception as e:
             logger.error(f"[{self.name}] error: {e}")

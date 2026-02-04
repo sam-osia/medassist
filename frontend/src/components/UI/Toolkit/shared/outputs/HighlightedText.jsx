@@ -1,34 +1,30 @@
 import React from 'react';
 import { Box, Typography, Paper } from '@mui/material';
+import { renderHighlightedText } from '../../../../../utils/highlightUtils';
 
 /**
  * HighlightedText - Text display with <highlight> tag rendering
  *
- * Converts <highlight>...</highlight> tags to styled spans.
+ * Renders text containing <highlight>...</highlight> tags as styled spans.
  *
  * @param {string} text - Text with optional highlight tags
  * @param {string} label - Optional label above the text
  * @param {string} highlightColor - Background color for highlights (default: warning.light)
- * @param {string} highlightTag - Tag name to look for (default: 'highlight')
  */
 function HighlightedText({
   text,
   label,
-  highlightColor = 'warning.light',
-  highlightTag = 'highlight',
+  highlightColor = '#ffeb3b',
   ...props
 }) {
   if (!text) {
     return null;
   }
 
-  // Convert highlight tags to styled spans
-  // Using a regex that handles multiline content
-  const pattern = new RegExp(`<${highlightTag}>([\\s\\S]*?)</${highlightTag}>`, 'g');
-  const html = text.replace(
-    pattern,
-    '<mark class="tool-highlight">$1</mark>'
-  );
+  // Use the shared utility to render highlighted text as React elements
+  const renderedContent = renderHighlightedText(text, {
+    backgroundColor: highlightColor
+  });
 
   return (
     <Box {...props}>
@@ -42,11 +38,6 @@ function HighlightedText({
         sx={{
           p: 2,
           backgroundColor: 'custom.neutralBackground',
-          '& .tool-highlight': {
-            backgroundColor: highlightColor,
-            padding: '2px 4px',
-            borderRadius: '2px',
-          }
         }}
       >
         <Typography
@@ -57,8 +48,9 @@ function HighlightedText({
             wordBreak: 'break-word',
             fontFamily: 'inherit'
           }}
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
+        >
+          {renderedContent}
+        </Typography>
       </Paper>
     </Box>
   );

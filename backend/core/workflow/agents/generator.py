@@ -78,13 +78,19 @@ Remember: Set prompt fields to null for tools that need them - they will be fill
                 logger.info(f"[{self.name}] success - generated {len(result.parsed.steps)} steps")
                 return GeneratorOutput(
                     workflow=result.parsed,
-                    success=True
+                    success=True,
+                    cost=result.cost,
+                    input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens
                 )
             else:
                 logger.warning(f"[{self.name}] failed to parse workflow from LLM response")
                 return GeneratorOutput(
                     success=False,
-                    error_message="Failed to parse workflow from LLM response"
+                    error_message="Failed to parse workflow from LLM response",
+                    cost=result.cost,
+                    input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens
                 )
 
         except Exception as e:

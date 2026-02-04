@@ -60,7 +60,7 @@ const ConversationSidebar = ({
     <Box
       sx={{
         width: 250,
-        height: '100vh',
+        height: '100%',
         borderRight: 1,
         borderColor: 'divider',
         backgroundColor: theme.palette.background.paper,

@@ -96,40 +96,6 @@ export const conversationService = {
         ApiService.delete(`/workflow-agent/conversations/${conversationId}`)
 };
 
-// Chat functions
-export const chatService = {
-    // Get list of available models
-    getModelsList: () => ApiService.get('/chat/models-list'),
-
-    // Simple non-streaming chat
-    chat: (model, systemMessage, messages) =>
-        ApiService.post('/chat/chat', {
-            model,
-            system_message: systemMessage,
-            messages
-        }),
-
-    // Streaming chat with supervisor (returns fetch Response for streaming)
-    supervisorStream: (userPrompt, mrn = null, csn = null, dataset = null, chatHistory = []) => {
-        const token = localStorage.getItem('idToken');
-
-        return fetch(`${ApiService.defaults.baseURL}/chat/supervisor-stream`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(token && { 'Authorization': `Bearer ${token}` })
-            },
-            body: JSON.stringify({
-                user_prompt: userPrompt,
-                mrn: mrn ? parseInt(mrn) : null,
-                csn: csn ? parseInt(csn) : null,
-                dataset: dataset,
-                chat_history: chatHistory
-            })
-        });
-    }
-};
-
 // Authentication functions
 export const authService = {
     // Check auth status

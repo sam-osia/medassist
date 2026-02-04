@@ -7,7 +7,7 @@ from core.workflow.tools.base import Tool
 from core.workflow.schemas.workflow_schema import Workflow
 from core.workflow.tools.notes import (
     GetPatientNotesIds, ReadPatientNote,
-    SummarizePatientNote, HighlightPatientNote, AnalyzeNoteWithSpanAndReason
+    SummarizePatientNote, AnalyzeNoteWithSpanAndReason
 )
 from core.workflow.tools.flowsheets import (
     ReadFlowsheetsTable, SummarizeFlowsheetsTable
@@ -119,7 +119,6 @@ class EditPlan(Tool):
             GetPatientNotesIds(),
             ReadPatientNote(),
             SummarizePatientNote(),
-            HighlightPatientNote(),
             AnalyzeNoteWithSpanAndReason(),
             ReadFlowsheetsTable(),
             SummarizeFlowsheetsTable(),

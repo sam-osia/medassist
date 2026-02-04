@@ -1,0 +1,380 @@
+{
+  "raw_workflow": {
+    "steps": [
+      {
+        "id": "get_note_ids",
+        "step_summary": "Retrieve all note IDs for the given patient MRN and CSN.",
+        "type": "tool",
+        "tool": "get_patient_notes_ids",
+        "inputs": {
+          "mrn": 0,
+          "csn": 0
+        },
+        "output": "note_ids"
+      },
+      {
+        "id": "loop_notes",
+        "step_summary": "Process each patient note to analyze social determinants of health.",
+        "type": "loop",
+        "for_var": "note_id",
+        "in_expr": "note_ids",
+        "body": [
+          {
+            "id": "read_note",
+            "step_summary": "Read the full content of the patient note.",
+            "type": "tool",
+            "tool": "read_patient_note",
+            "inputs": {
+              "mrn": 0,
+              "csn": 0,
+              "note_id": "{note_id}"
+            },
+            "output": "note_text"
+          },
+          {
+            "id": "analyze_language_barrier",
+            "step_summary": "Analyze for language barrier indicator in the note.",
+            "type": "tool",
+            "tool": "analyze_note_with_span_and_reason",
+            "inputs": {
+              "note": "{note_text}",
+              "prompt": {
+                "system_prompt": "You are an expert in identifying social determinants of health by reading patient notes. Your job is to identify if there are any signs of a language barrier within the note. If you identify it, you will raise a True flag, give the span of the text that led to the True flag and give your reasoning for your selection.\n",
+                "user_prompt": "# Instructions\n\n1. Read the note carefully and fully analyze it\n2. Raise the flag to True if the note meets the criteria\n3. If the flag is True, extract the span of the note that led to that decision. Otherwise, return blank.\n4. IMPORTANT: The span text must be IDENTICAL to the note text, such that the span can be found with a simple computer search within the note\n5. If the flag is True, provide your reasoning for why the highlighted section was selected to match the criteria\n\n# Criteria\n\nIf the note mentions the patient speaks a non-English language, or there is a communication barrier due to language\n\n# Note\n\n{{note}}",
+                "examples": []
+              }
+            },
+            "output": "language_barrier_result"
+          },
+          {
+            "id": "analyze_financial_strain",
+            "step_summary": "Analyze for financial strain indicator in the note.",
+            "type": "tool",
+            "tool": "analyze_note_with_span_and_reason",
+            "inputs": {
+              "note": "{note_text}",
+              "prompt": {
+                "system_prompt": "You are an expert in identifying social determinants of health by reading patient notes. Identify evidence of financial strain within the note. If found, raise a True flag, provide the span of text, and explain your reasoning.\n",
+                "user_prompt": "# Instructions\n\n1. Read the note carefully and fully analyze it\n2. Raise the flag to True if the note meets the criteria\n3. If the flag is True, extract the span of the note that led to that decision. Otherwise, return blank.\n4. IMPORTANT: The span text must be IDENTICAL to the note text, such that the span can be found with a simple computer search within the note\n5. If the flag is True, provide your reasoning for why the highlighted section was selected to match the criteria\n\n# Criteria\n\nIdentify if the patient is on a financial support plan (OW, ODSP, ODSB, OAS, CPP, TDP, ODB). If Plan is ODSP, ODSB or OW, set the flag to True. If no plan is mentioned, set the flag to false. If the clinical note indicates that the patient is receiving Ontario Works (OW) or Ontario Disability Support Program (ODSP), set the flag to True regardless of other content. If the clinical note indicates that the patient is receiving Old Age Security (OAS), Canada Pension Plan (CPP), Trillium Drug Plan (TDP), or Ontario Drug Benefit (ODB) without other evidence of financial strain, set the flag to false. \n\n# Note\n\n{{note}}",
+                "examples": []
+              }
+            },
+            "output": "financial_strain_result"
+          },
+          {
+            "id": "analyze_social_isolation",
+            "step_summary": "Analyze for social isolation indicator in the note.",
+            "type": "tool",
+            "tool": "analyze_note_with_span_and_reason",
+            "inputs": {
+              "note": "{note_text}",
+              "prompt": {
+                "system_prompt": "You are an expert in identifying social determinants of health by reading patient notes. Identify any social isolation indications. Raise a True flag, provide the text span, and explain your reasoning.\n",
+                "user_prompt": "# Instructions\n\n1. Read the note carefully and fully analyze it\n2. Raise the flag to True if the note meets the criteria\n3. If the flag is True, extract the span of the note that led to that decision. Otherwise, return blank.\n4. IMPORTANT: The span text must be IDENTICAL to the note text, such that the span can be found with a simple computer search within the note\n5. If the flag is True, provide your reasoning for why the highlighted section was selected to match the criteria\n\n# Criteria\n\nAny mention that includes lack of social support, lack of community support, feeling lonely, or having no friends or family are considered as social isolation. Additionally, if the patient lives alone, raise the flag to True. \n\n# Note\n\n{{note}}",
+                "examples": []
+              }
+            },
+            "output": "social_isolation_result"
+          },
+          {
+            "id": "analyze_housing_insecurity",
+            "step_summary": "Analyze for housing insecurity indicator in the note.",
+            "type": "tool",
+            "tool": "analyze_note_with_span_and_reason",
+            "inputs": {
+              "note": "{note_text}",
+              "prompt": {
+                "system_prompt": "You are an expert in identifying social determinants of health by reading patient notes. Detect signs of housing insecurity within the note. If found, raise a True flag, indicate the span of text, and explain your decision.\n",
+                "user_prompt": "# Instructions\n\n1. Read the note carefully and fully analyze it\n2. Raise the flag to True if the note meets the criteria\n3. If the flag is True, extract the span of the note that led to that decision. Otherwise, return blank.\n4. IMPORTANT: The span text must be IDENTICAL to the note text, such that the span can be found with a simple computer search within the note\n5. If the flag is True, provide your reasoning for why the highlighted section was selected to match the criteria\n\n# Criteria\n\nAny mention of homelessness, living in a shelter or tent, having no fixed address, eviction risk or recent eviction, or housing that does not meet basic needs is considered evidence of housing insecurity. Do not include patient lives alone and lives in supportive housing.\n\n# Note\n\n{{note}}",
+                "examples": []
+              }
+            },
+            "output": "housing_insecurity_result"
+          },
+          {
+            "id": "analyze_depression",
+            "step_summary": "Analyze for depression indicator in the note.",
+            "type": "tool",
+            "tool": "analyze_note_with_span_and_reason",
+            "inputs": {
+              "note": "{note_text}",
+              "prompt": {
+                "system_prompt": "You are an expert in identifying social determinants of health by reading patient notes. Identify signs of depression. If found, raise a True flag, provide the span, and justify your selection.\n",
+                "user_prompt": "# Instructions\n\n1. Read the note carefully and fully analyze it\n2. Raise the flag to True if the note meets the criteria\n3. If the flag is True, extract the span of the note that led to that decision. Otherwise, return blank.\n4. IMPORTANT: The span text must be IDENTICAL to the note text, such that the span can be found with a simple computer search within the note\n5. If the flag is True, provide your reasoning for why the highlighted section was selected to match the criteria\n\n# Criteria\n\nIncludes any mention of patient has fatigue, depressed mood, suicide idea, hopelessness, sadness, or similar symptoms as evidence of depression\n\n# Note\n\n{{note}}",
+                "examples": []
+              }
+            },
+            "output": "depression_result"
+          },
+          {
+            "id": "analyze_addiction",
+            "step_summary": "Analyze for addiction indicator in the note.",
+            "type": "tool",
+            "tool": "analyze_note_with_span_and_reason",
+            "inputs": {
+              "note": "{note_text}",
+              "prompt": {
+                "system_prompt": "You are an expert in identifying social determinants of health by reading patient notes. Look for indications of addiction. If detected, raise a True flag, extract the text span, and provide reasoning.\n",
+                "user_prompt": "# Instructions\n\n1. Read the note carefully and fully analyze it\n2. Raise the flag to True if the note meets the criteria\n3. If the flag is True, extract the span of the note that led to that decision. Otherwise, return blank.\n4. IMPORTANT: The span text must be IDENTICAL to the note text, such that the span can be found with a simple computer search within the note\n5. If the flag is True, provide your reasoning for why the highlighted section was selected to match the criteria\n\n# Criteria\n\nDetermine if the patient has addiction or substance abuse. Do not include notes that only contain general warnings or instructions about withdrawal or overdose, without evidence of actual symptoms or substance use history. Do not flag yes if classification is based on medication\n\n# Note\n\n{{note}}",
+                "examples": []
+              }
+            },
+            "output": "addiction_result"
+          },
+          {
+            "id": "analyze_food_insecurity",
+            "step_summary": "Analyze for food insecurity indicator in the note.",
+            "type": "tool",
+            "tool": "analyze_note_with_span_and_reason",
+            "inputs": {
+              "note": "{note_text}",
+              "prompt": {
+                "system_prompt": "You are an expert in identifying social determinants of health by reading patient notes. Identify food insecurity signs. If found, raise a True flag, span the text, and explain.\n",
+                "user_prompt": "# Instructions\n\n1. Read the note carefully and fully analyze it\n2. Raise the flag to True if the note meets the criteria\n3. If the flag is True, extract the span of the note that led to that decision. Otherwise, return blank.\n4. IMPORTANT: The span text must be IDENTICAL to the note text, such that the span can be found with a simple computer search within the note\n5. If the flag is True, provide your reasoning for why the highlighted section was selected to match the criteria\n\n# Criteria\n\nInclude notes that mention the patient goes to a food bank, is lacking food etc. Do not include if notes mention the following: 1) patients expressing dissatisfaction of food 2) reduced or limited food intake due to medical condition. These are not food insecurity so do not flag them.\n\n# Note\n\n{{note}}",
+                "examples": []
+              }
+            },
+            "output": "food_insecurity_result"
+          },
+          {
+            "id": "analyze_transportation",
+            "step_summary": "Analyze for transportation issues indicator in the note.",
+            "type": "tool",
+            "tool": "analyze_note_with_span_and_reason",
+            "inputs": {
+              "note": "{note_text}",
+              "prompt": {
+                "system_prompt": "You are an expert in identifying social determinants of health by reading patient notes. Detect transportation issues. If any, raise a True flag, give the span, and provide reasoning.\n",
+                "user_prompt": "# Instructions\n\n1. Read the note carefully and fully analyze it\n2. Raise the flag to True if the note meets the criteria\n3. If the flag is True, extract the span of the note that led to that decision. Otherwise, return blank.\n4. IMPORTANT: The span text must be IDENTICAL to the note text, such that the span can be found with a simple computer search within the note\n5. If the flag is True, provide your reasoning for why the highlighted section was selected to match the criteria\n\n# Criteria\n\nInclude notes that mention the patient requires a transportation service, is unable to drive, para transpo, etc. Do not include if the note only mentions general information about transportation options or resources without evidence of a transportation-related social need.\n\n# Note\n\n{{note}}",
+                "examples": []
+              }
+            },
+            "output": "transportation_result"
+          },
+          {
+            "id": "analyze_health_literacy",
+            "step_summary": "Analyze for health literacy indicator in the note.",
+            "type": "tool",
+            "tool": "analyze_note_with_span_and_reason",
+            "inputs": {
+              "note": "{note_text}",
+              "prompt": {
+                "system_prompt": "You are an expert in identifying social determinants of health by reading patient notes. Find health literacy issues. If located, raise a True flag, show the span, and offer your reasoning.\n",
+                "user_prompt": "# Instructions\n\n1. Read the note carefully and fully analyze it\n2. Raise the flag to True if the note meets the criteria\n3. If the flag is True, extract the span of the note that led to that decision. Otherwise, return blank.\n4. IMPORTANT: The span text must be IDENTICAL to the note text, such that the span can be found with a simple computer search within the note\n5. If the flag is True, provide your reasoning for why the highlighted section was selected to match the criteria\n\n# Criteria\n\nIncludes any mention of patient misunderstanding instructions, trouble reading forms (e.g., 'forgot glasses'), confusion about medications, repeated questions, or missed appointments due to misunderstanding. Do not include patient has language barrier.\n\n# Note\n\n{{note}}",
+                "examples": []
+              }
+            },
+            "output": "health_literacy_result"
+          }
+        ],
+        "output_dict": null
+      }
+    ],
+    "output_definitions": [
+      {
+        "id": "def_language_barrier",
+        "name": "language_barrier",
+        "label": "Language Barrier",
+        "description": "Identifies language barrier indicators in patient notes",
+        "fields": [
+          {"name": "detected", "type": "boolean", "description": "Whether a language barrier was detected"},
+          {"name": "span", "type": "text", "description": "Text span indicating language barrier"},
+          {"name": "reasoning", "type": "text", "description": "Reasoning for the detection"}
+        ],
+        "tool_name": "analyze_note_with_span_and_reason"
+      },
+      {
+        "id": "def_financial_strain",
+        "name": "financial_strain",
+        "label": "Financial Strain",
+        "description": "Identifies financial strain indicators in patient notes",
+        "fields": [
+          {"name": "detected", "type": "boolean", "description": "Whether financial strain was detected"},
+          {"name": "span", "type": "text", "description": "Text span indicating financial strain"},
+          {"name": "reasoning", "type": "text", "description": "Reasoning for the detection"}
+        ],
+        "tool_name": "analyze_note_with_span_and_reason"
+      },
+      {
+        "id": "def_social_isolation",
+        "name": "social_isolation",
+        "label": "Social Isolation",
+        "description": "Identifies social isolation indicators in patient notes",
+        "fields": [
+          {"name": "detected", "type": "boolean", "description": "Whether social isolation was detected"},
+          {"name": "span", "type": "text", "description": "Text span indicating social isolation"},
+          {"name": "reasoning", "type": "text", "description": "Reasoning for the detection"}
+        ],
+        "tool_name": "analyze_note_with_span_and_reason"
+      },
+      {
+        "id": "def_housing_insecurity",
+        "name": "housing_insecurity",
+        "label": "Housing Insecurity",
+        "description": "Identifies housing insecurity indicators in patient notes",
+        "fields": [
+          {"name": "detected", "type": "boolean", "description": "Whether housing insecurity was detected"},
+          {"name": "span", "type": "text", "description": "Text span indicating housing insecurity"},
+          {"name": "reasoning", "type": "text", "description": "Reasoning for the detection"}
+        ],
+        "tool_name": "analyze_note_with_span_and_reason"
+      },
+      {
+        "id": "def_depression",
+        "name": "depression",
+        "label": "Depression",
+        "description": "Identifies depression indicators in patient notes",
+        "fields": [
+          {"name": "detected", "type": "boolean", "description": "Whether depression was detected"},
+          {"name": "span", "type": "text", "description": "Text span indicating depression"},
+          {"name": "reasoning", "type": "text", "description": "Reasoning for the detection"}
+        ],
+        "tool_name": "analyze_note_with_span_and_reason"
+      },
+      {
+        "id": "def_addiction",
+        "name": "addiction",
+        "label": "Addiction",
+        "description": "Identifies addiction indicators in patient notes",
+        "fields": [
+          {"name": "detected", "type": "boolean", "description": "Whether addiction was detected"},
+          {"name": "span", "type": "text", "description": "Text span indicating addiction"},
+          {"name": "reasoning", "type": "text", "description": "Reasoning for the detection"}
+        ],
+        "tool_name": "analyze_note_with_span_and_reason"
+      },
+      {
+        "id": "def_food_insecurity",
+        "name": "food_insecurity",
+        "label": "Food Insecurity",
+        "description": "Identifies food insecurity indicators in patient notes",
+        "fields": [
+          {"name": "detected", "type": "boolean", "description": "Whether food insecurity was detected"},
+          {"name": "span", "type": "text", "description": "Text span indicating food insecurity"},
+          {"name": "reasoning", "type": "text", "description": "Reasoning for the detection"}
+        ],
+        "tool_name": "analyze_note_with_span_and_reason"
+      },
+      {
+        "id": "def_transportation",
+        "name": "transportation",
+        "label": "Transportation",
+        "description": "Identifies transportation issue indicators in patient notes",
+        "fields": [
+          {"name": "detected", "type": "boolean", "description": "Whether transportation issues were detected"},
+          {"name": "span", "type": "text", "description": "Text span indicating transportation issues"},
+          {"name": "reasoning", "type": "text", "description": "Reasoning for the detection"}
+        ],
+        "tool_name": "analyze_note_with_span_and_reason"
+      },
+      {
+        "id": "def_health_literacy",
+        "name": "health_literacy",
+        "label": "Health Literacy",
+        "description": "Identifies health literacy issue indicators in patient notes",
+        "fields": [
+          {"name": "detected", "type": "boolean", "description": "Whether health literacy issues were detected"},
+          {"name": "span", "type": "text", "description": "Text span indicating health literacy issues"},
+          {"name": "reasoning", "type": "text", "description": "Reasoning for the detection"}
+        ],
+        "tool_name": "analyze_note_with_span_and_reason"
+      }
+    ],
+    "output_mappings": [
+      {
+        "output_definition_id": "def_language_barrier",
+        "field_mappings": [
+          {"field_name": "detected", "variable_path": "language_barrier_result.flag_state"},
+          {"field_name": "span", "variable_path": "language_barrier_result.span"},
+          {"field_name": "reasoning", "variable_path": "language_barrier_result.reasoning"}
+        ],
+        "evidence": [{"resource_type": "note", "id_path": "note_id"}],
+        "condition": null
+      },
+      {
+        "output_definition_id": "def_financial_strain",
+        "field_mappings": [
+          {"field_name": "detected", "variable_path": "financial_strain_result.flag_state"},
+          {"field_name": "span", "variable_path": "financial_strain_result.span"},
+          {"field_name": "reasoning", "variable_path": "financial_strain_result.reasoning"}
+        ],
+        "evidence": [{"resource_type": "note", "id_path": "note_id"}],
+        "condition": null
+      },
+      {
+        "output_definition_id": "def_social_isolation",
+        "field_mappings": [
+          {"field_name": "detected", "variable_path": "social_isolation_result.flag_state"},
+          {"field_name": "span", "variable_path": "social_isolation_result.span"},
+          {"field_name": "reasoning", "variable_path": "social_isolation_result.reasoning"}
+        ],
+        "evidence": [{"resource_type": "note", "id_path": "note_id"}],
+        "condition": null
+      },
+      {
+        "output_definition_id": "def_housing_insecurity",
+        "field_mappings": [
+          {"field_name": "detected", "variable_path": "housing_insecurity_result.flag_state"},
+          {"field_name": "span", "variable_path": "housing_insecurity_result.span"},
+          {"field_name": "reasoning", "variable_path": "housing_insecurity_result.reasoning"}
+        ],
+        "evidence": [{"resource_type": "note", "id_path": "note_id"}],
+        "condition": null
+      },
+      {
+        "output_definition_id": "def_depression",
+        "field_mappings": [
+          {"field_name": "detected", "variable_path": "depression_result.flag_state"},
+          {"field_name": "span", "variable_path": "depression_result.span"},
+          {"field_name": "reasoning", "variable_path": "depression_result.reasoning"}
+        ],
+        "evidence": [{"resource_type": "note", "id_path": "note_id"}],
+        "condition": null
+      },
+      {
+        "output_definition_id": "def_addiction",
+        "field_mappings": [
+          {"field_name": "detected", "variable_path": "addiction_result.flag_state"},
+          {"field_name": "span", "variable_path": "addiction_result.span"},
+          {"field_name": "reasoning", "variable_path": "addiction_result.reasoning"}
+        ],
+        "evidence": [{"resource_type": "note", "id_path": "note_id"}],
+        "condition": null
+      },
+      {
+        "output_definition_id": "def_food_insecurity",
+        "field_mappings": [
+          {"field_name": "detected", "variable_path": "food_insecurity_result.flag_state"},
+          {"field_name": "span", "variable_path": "food_insecurity_result.span"},
+          {"field_name": "reasoning", "variable_path": "food_insecurity_result.reasoning"}
+        ],
+        "evidence": [{"resource_type": "note", "id_path": "note_id"}],
+        "condition": null
+      },
+      {
+        "output_definition_id": "def_transportation",
+        "field_mappings": [
+          {"field_name": "detected", "variable_path": "transportation_result.flag_state"},
+          {"field_name": "span", "variable_path": "transportation_result.span"},
+          {"field_name": "reasoning", "variable_path": "transportation_result.reasoning"}
+        ],
+        "evidence": [{"resource_type": "note", "id_path": "note_id"}],
+        "condition": null
+      },
+      {
+        "output_definition_id": "def_health_literacy",
+        "field_mappings": [
+          {"field_name": "detected", "variable_path": "health_literacy_result.flag_state"},
+          {"field_name": "span", "variable_path": "health_literacy_result.span"},
+          {"field_name": "reasoning", "variable_path": "health_literacy_result.reasoning"}
+        ],
+        "evidence": [{"resource_type": "note", "id_path": "note_id"}],
+        "condition": null
+      }
+    ]
+  },
+  "created_by": "migrated",
+  "workflow_name": "sdoh",
+  "last_modified_date": "2026-02-02T18:31:03.821505",
+  "created_date": "2026-02-02T18:31:03.821505"
+}

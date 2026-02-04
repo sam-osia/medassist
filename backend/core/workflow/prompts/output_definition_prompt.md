@@ -30,9 +30,9 @@ Each field in `fields` has:
 
 Each output_mapping connects step outputs to a definition:
 - `output_definition_id`: References the definition
-- `field_mappings`: Dictionary mapping field names to variable paths
-  - Key: The field name from the output definition
-  - Value: Plain variable path to the step result (e.g., "analysis_result.flag_state")
+- `field_mappings`: List of FieldMapping objects, each with:
+  - `field_name`: The field name from the output definition (e.g., "detected")
+  - `variable_path`: Plain variable path to the step result (e.g., "analysis_result.flag_state")
   - IMPORTANT: Do NOT use template syntax like {{ variable }}. Use plain variable names only.
 - `evidence`: List of EvidenceMapping objects (can be empty, single, or multiple)
 - `condition`: Optional condition for when to create this output
@@ -79,11 +79,11 @@ For a workflow step that analyzes a note for depression:
   "output_mappings": [
     {
       "output_definition_id": "def_depression",
-      "field_mappings": {
-        "detected": "analysis_result.flag_state",
-        "span": "analysis_result.span",
-        "reasoning": "analysis_result.reasoning"
-      },
+      "field_mappings": [
+        {"field_name": "detected", "variable_path": "analysis_result.flag_state"},
+        {"field_name": "span", "variable_path": "analysis_result.span"},
+        {"field_name": "reasoning", "variable_path": "analysis_result.reasoning"}
+      ],
       "evidence": [
         {"resource_type": "note", "id_path": "loop.current_note.note_id"}
       ],
@@ -115,11 +115,11 @@ For a workflow that combines multiple notes and medications:
   "output_mappings": [
     {
       "output_definition_id": "def_combined_analysis",
-      "field_mappings": {
-        "input_text": "aggregate_step.combined_text",
-        "detected": "final_analysis.flag_state",
-        "reasoning": "final_analysis.reasoning"
-      },
+      "field_mappings": [
+        {"field_name": "input_text", "variable_path": "aggregate_step.combined_text"},
+        {"field_name": "detected", "variable_path": "final_analysis.flag_state"},
+        {"field_name": "reasoning", "variable_path": "final_analysis.reasoning"}
+      ],
       "evidence": [
         {"resource_type": "note", "id_path": "matched_notes[0].note_id"},
         {"resource_type": "note", "id_path": "matched_notes[1].note_id"},
@@ -149,9 +149,9 @@ For a simple summary that doesn't need to link back to documents:
   "output_mappings": [
     {
       "output_definition_id": "def_encounter_summary",
-      "field_mappings": {
-        "summary": "summarize_step.text"
-      },
+      "field_mappings": [
+        {"field_name": "summary", "variable_path": "summarize_step.text"}
+      ],
       "evidence": []
     }
   ]
@@ -168,4 +168,4 @@ For a simple summary that doesn't need to link back to documents:
    - For direct outputs (analyzing single documents): include one evidence entry
    - For aggregated outputs: include multiple evidence entries if traceability is important, or leave empty if not needed
 6. Keep the original workflow steps unchanged - only add output_definitions and output_mappings
-7. CRITICAL: In field_mappings, use plain variable names (e.g., "analysis_result.flag_state"), NEVER use template syntax like "{{ analysis_result.flag_state }}"
+7. CRITICAL: In field_mappings, use plain variable names in variable_path (e.g., "analysis_result.flag_state"), NEVER use template syntax like "{{ analysis_result.flag_state }}"

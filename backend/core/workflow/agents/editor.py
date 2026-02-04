@@ -49,7 +49,7 @@ Output the modified workflow as valid JSON."""
         logger.debug(f"[{self.name}] edit_request: {inputs.edit_request}")
         try:
             # Serialize current workflow
-            current_workflow_str = inputs.current_workflow.model_dump_json(indent=2)
+            current_workflow_str = inputs.current_workflow.model_dump_json(indent=2, by_alias=True)
             tool_specs_str = json.dumps(inputs.tool_specs, indent=2)
 
             system_prompt = f"""{self._prompt}
@@ -79,13 +79,19 @@ IMPORTANT: Preserve prompt values for unchanged steps!"""
                 logger.info(f"[{self.name}] success - edited workflow has {len(result.parsed.steps)} steps")
                 return EditorOutput(
                     workflow=result.parsed,
-                    success=True
+                    success=True,
+                    cost=result.cost,
+                    input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens
                 )
             else:
                 logger.warning(f"[{self.name}] failed to parse edited workflow from LLM response")
                 return EditorOutput(
                     success=False,
-                    error_message="Failed to parse edited workflow from LLM response"
+                    error_message="Failed to parse edited workflow from LLM response",
+                    cost=result.cost,
+                    input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens
                 )
 
         except Exception as e:

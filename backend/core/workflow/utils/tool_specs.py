@@ -6,7 +6,6 @@ from core.workflow.tools.notes import (
     GetPatientNotesIds,
     ReadPatientNote,
     SummarizePatientNote,
-    HighlightPatientNote,
     AnalyzeNoteWithSpanAndReason,
 )
 from core.workflow.tools.flowsheets import (
@@ -24,6 +23,12 @@ from core.workflow.tools.diagnosis import (
     ReadDiagnosis,
     HighlightDiagnosis,
 )
+from core.workflow.tools.variable_management import (
+    InitStore,
+    StoreAppend,
+    StoreRead,
+    BuildText,
+)
 
 
 def get_tools_list(dataset: str = None) -> List:
@@ -32,7 +37,6 @@ def get_tools_list(dataset: str = None) -> List:
         GetPatientNotesIds(dataset=dataset),
         ReadPatientNote(dataset=dataset),
         SummarizePatientNote(),
-        HighlightPatientNote(),
         AnalyzeNoteWithSpanAndReason(),
         ReadFlowsheetsTable(dataset=dataset),
         SummarizeFlowsheetsTable(),
@@ -43,6 +47,11 @@ def get_tools_list(dataset: str = None) -> List:
         GetDiagnosisIds(dataset=dataset),
         ReadDiagnosis(dataset=dataset),
         HighlightDiagnosis(),
+        # Variable Management
+        InitStore(dataset=dataset),
+        StoreAppend(dataset=dataset),
+        StoreRead(dataset=dataset),
+        BuildText(dataset=dataset),
     ]
 
 

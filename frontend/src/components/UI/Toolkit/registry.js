@@ -14,9 +14,6 @@
 import KeywordCountInputForm from './tools/keyword_count/InputForm';
 import KeywordCountOutputView from './tools/keyword_count/OutputView';
 
-import IdentifyFlagInputForm from './tools/identify_flag/InputForm';
-import IdentifyFlagOutputView from './tools/identify_flag/OutputView';
-
 import AnalyzeNoteInputForm from './tools/analyze_note_with_span_and_reason/InputForm';
 import AnalyzeNoteOutputView from './tools/analyze_note_with_span_and_reason/OutputView';
 
@@ -35,10 +32,6 @@ const TOOL_REGISTRY = {
   keyword_count: {
     InputForm: KeywordCountInputForm,
     OutputView: KeywordCountOutputView,
-  },
-  identify_flag: {
-    InputForm: IdentifyFlagInputForm,
-    OutputView: IdentifyFlagOutputView,
   },
   analyze_note_with_span_and_reason: {
     InputForm: AnalyzeNoteInputForm,

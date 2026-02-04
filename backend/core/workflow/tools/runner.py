@@ -14,9 +14,7 @@ from core.workflow.schemas.tool_inputs import (
     GetPatientNotesIdsInput,
     ReadPatientNoteInput,
     SummarizePatientNoteInput,
-    HighlightPatientNoteInput,
     KeywordCountInput,
-    IdentifyFlagInput,
     AnalyzeNoteWithSpanAndReasonInput,
     ReadFlowsheetsTableInput,
     SummarizeFlowsheetsTableInput,
@@ -26,6 +24,10 @@ from core.workflow.schemas.tool_inputs import (
     GetDiagnosisIdsInput,
     ReadDiagnosisInput,
     FilterMedicationInput,
+    InitStoreInput,
+    StoreAppendInput,
+    StoreReadInput,
+    BuildTextInput,
 )
 
 
@@ -35,9 +37,7 @@ def _pydantic_input_model_map() -> Dict[str, type[BaseModel]]:
         "get_patient_notes_ids": GetPatientNotesIdsInput,
         "read_patient_note": ReadPatientNoteInput,
         "summarize_patient_note": SummarizePatientNoteInput,
-        "highlight_patient_note": HighlightPatientNoteInput,
         "keyword_count": KeywordCountInput,
-        "identify_flag": IdentifyFlagInput,
         "analyze_note_with_span_and_reason": AnalyzeNoteWithSpanAndReasonInput,
 
         # Flowsheets
@@ -53,6 +53,12 @@ def _pydantic_input_model_map() -> Dict[str, type[BaseModel]]:
         # Diagnosis
         "get_diagnosis_ids": GetDiagnosisIdsInput,
         "read_diagnosis": ReadDiagnosisInput,
+
+        # Variable Management
+        "init_store": InitStoreInput,
+        "store_append": StoreAppendInput,
+        "store_read": StoreReadInput,
+        "build_text": BuildTextInput,
     }
 
 

@@ -1,4 +1,3 @@
-from .chat import router as chat_router
 from .auth import router as auth_router
 from .tool import router as tool_router
 from .workflows import router as workflow_router

@@ -12,16 +12,18 @@ const OutputDefinitionCard = ({ definition, mapping }) => {
   return (
     <Card variant="outlined" sx={{ backgroundColor: 'action.hover' }}>
       <CardContent>
-        {/* Header: Label + Type Chip */}
+        {/* Header: Label + Tool Name Chip (if present) */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
           <Typography variant="subtitle1" fontWeight={600}>
             {definition.label}
           </Typography>
-          <Chip
-            label={definition.output_type}
-            size="small"
-            color={definition.output_type === 'direct' ? 'primary' : 'secondary'}
-          />
+          {definition.tool_name && (
+            <Chip
+              label={definition.tool_name}
+              size="small"
+              variant="outlined"
+            />
+          )}
         </Box>
 
         {/* Name (monospace) */}
@@ -43,7 +45,7 @@ const OutputDefinitionCard = ({ definition, mapping }) => {
           OUTPUT FIELDS
         </Typography>
         <Box sx={{ mt: 0.5 }}>
-          {definition.output_fields?.map(field => (
+          {definition.fields?.map(field => (
             <Box key={field.name} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.25 }}>
               <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
                 {field.name}
@@ -58,54 +60,21 @@ const OutputDefinitionCard = ({ definition, mapping }) => {
           ))}
         </Box>
 
-        {/* Evidence Schema Section */}
-        {definition.evidence_schema && (
+        {/* Field Mappings Section (if mapping exists) */}
+        {mapping && mapping.field_mappings?.length > 0 && (
           <>
             <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ mt: 1.5, display: 'block' }}>
-              EVIDENCE SCHEMA
+              FIELD MAPPINGS
             </Typography>
             <Box sx={{ mt: 0.5 }}>
-              {definition.evidence_schema.type === 'direct' ? (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Chip label={definition.evidence_schema.resource_type} size="small" />
-                  {definition.evidence_schema.fields?.length > 0 && (
-                    <Typography variant="caption" color="text.secondary">
-                      ({definition.evidence_schema.fields.map(f => f.name).join(', ')})
-                    </Typography>
-                  )}
-                </Box>
-              ) : (
-                // Aggregated: show sources
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                  {definition.evidence_schema.sources?.map((source, idx) => (
-                    <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Chip label={source.resource_type} size="small" />
-                      <Typography variant="caption" color="text.secondary">
-                        → {source.role}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Box>
-              )}
-            </Box>
-          </>
-        )}
-
-        {/* Value Mappings Section (if mapping exists) */}
-        {mapping && mapping.value_sources?.length > 0 && (
-          <>
-            <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ mt: 1.5, display: 'block' }}>
-              VALUE MAPPINGS
-            </Typography>
-            <Box sx={{ mt: 0.5 }}>
-              {mapping.value_sources.map((vs, idx) => (
+              {mapping.field_mappings.map((fm, idx) => (
                 <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.25 }}>
                   <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                    {vs.output_field}
+                    {fm.field_name}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">←</Typography>
                   <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'primary.main' }}>
-                    {vs.variable_path}
+                    {fm.variable_path}
                   </Typography>
                 </Box>
               ))}
@@ -113,20 +82,19 @@ const OutputDefinitionCard = ({ definition, mapping }) => {
           </>
         )}
 
-        {/* Evidence Sources Section (if mapping has evidence_sources) */}
-        {mapping && mapping.evidence_sources?.length > 0 && (
+        {/* Evidence Section (if mapping has evidence) */}
+        {mapping && mapping.evidence?.length > 0 && (
           <>
             <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ mt: 1.5, display: 'block' }}>
-              EVIDENCE SOURCES
+              EVIDENCE
             </Typography>
             <Box sx={{ mt: 0.5 }}>
-              {mapping.evidence_sources.map((es, idx) => (
+              {mapping.evidence.map((ev, idx) => (
                 <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.25 }}>
-                  <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                    {es.step_id}
+                  <Chip label={ev.resource_type} size="small" variant="outlined" />
+                  <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                    {ev.id_path}
                   </Typography>
-                  <Chip label={es.resource_type} size="small" variant="outlined" />
-                  <Chip label={es.role} size="small" color="info" variant="outlined" />
                 </Box>
               ))}
             </Box>

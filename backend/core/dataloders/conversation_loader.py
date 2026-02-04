@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import shutil
 from typing import List, Dict, Any, Optional
 from threading import Lock
 import datetime
@@ -9,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 CONVERSATIONS_DIR = "conversations"
+
 
 class ConversationCache:
     """Thread-safe singleton cache for conversation data."""
@@ -45,7 +47,7 @@ class ConversationCache:
             self._conversations_cache = None
 
     def _load_all_conversations(self) -> Dict[str, Any]:
-        """Load all conversations from disk."""
+        """Load all conversations from disk (folder structure)."""
         logger.info("Loading conversations from disk...")
 
         conversations = {}
@@ -55,33 +57,38 @@ class ConversationCache:
             logger.info(f"Created conversations directory: {CONVERSATIONS_DIR}")
             return conversations
 
-        for filename in os.listdir(CONVERSATIONS_DIR):
-            if not filename.endswith('.json'):
-                continue
+        for item in os.listdir(CONVERSATIONS_DIR):
+            item_path = os.path.join(CONVERSATIONS_DIR, item)
 
-            conversation_id = filename[:-5]  # Remove .json extension
-            conversation_path = os.path.join(CONVERSATIONS_DIR, filename)
+            # New format: folder with conversation.json inside
+            if os.path.isdir(item_path):
+                conversation_id = item
+                conversation_path = os.path.join(item_path, "conversation.json")
 
-            try:
-                with open(conversation_path, 'r') as f:
-                    conversation_data = json.load(f)
+                if not os.path.exists(conversation_path):
+                    logger.warning(f"Folder {item} has no conversation.json, skipping")
+                    continue
 
-                # Validate required fields
-                required_fields = ['conversation_id', 'created_date', 'messages']
-                if all(field in conversation_data for field in required_fields):
-                    conversations[conversation_id] = conversation_data
-                else:
-                    logger.warning(f"Conversation {conversation_id} missing required fields, skipping")
+                try:
+                    with open(conversation_path, 'r') as f:
+                        conversation_data = json.load(f)
 
-            except Exception as e:
-                logger.error(f"Error loading conversation {conversation_id}: {e}")
-                continue
+                    # Validate required fields
+                    required_fields = ['conversation_id', 'created_date', 'messages']
+                    if all(field in conversation_data for field in required_fields):
+                        conversations[conversation_id] = conversation_data
+                    else:
+                        logger.warning(f"Conversation {conversation_id} missing required fields, skipping")
+
+                except Exception as e:
+                    logger.error(f"Error loading conversation {conversation_id}: {e}")
+                    continue
 
         logger.info(f"Loaded {len(conversations)} conversations from disk")
         return conversations
 
-    def save_conversation(self, conversation_id: str, data: Dict[str, Any], created_by: str = None) -> bool:
-        """Save a conversation to disk and update cache.
+    def save_conversation(self, conversation_id: str, data: Dict[str, Any], created_by: str = None) -> Dict[str, Any]:
+        """Save a conversation to disk (folder structure) and update cache.
 
         Args:
             conversation_id: Unique identifier for the conversation
@@ -89,8 +96,9 @@ class ConversationCache:
             created_by: User ID who created the conversation
         """
         try:
-            # Ensure conversations directory exists
-            os.makedirs(CONVERSATIONS_DIR, exist_ok=True)
+            # Create conversation folder
+            conversation_folder = os.path.join(CONVERSATIONS_DIR, conversation_id)
+            os.makedirs(conversation_folder, exist_ok=True)
 
             # Extract messages and workflows from data
             messages = data.get("messages", [])
@@ -130,8 +138,22 @@ class ConversationCache:
                 else:
                     conversation_data['title'] = 'New Conversation'
 
-            # Save to disk
-            conversation_path = os.path.join(CONVERSATIONS_DIR, f"{conversation_id}.json")
+            # Calculate cumulative cost totals from all assistant messages
+            total_cost = 0.0
+            total_input_tokens = 0
+            total_output_tokens = 0
+            for msg in messages:
+                if msg.get('type') == 'assistant':
+                    total_cost += msg.get('cost', 0.0) or 0.0
+                    total_input_tokens += msg.get('input_tokens', 0) or 0
+                    total_output_tokens += msg.get('output_tokens', 0) or 0
+
+            conversation_data['total_cost'] = total_cost
+            conversation_data['total_input_tokens'] = total_input_tokens
+            conversation_data['total_output_tokens'] = total_output_tokens
+
+            # Save to disk (folder structure)
+            conversation_path = os.path.join(conversation_folder, "conversation.json")
             with open(conversation_path, 'w') as f:
                 json.dump(conversation_data, f, indent=2)
 
@@ -141,11 +163,21 @@ class ConversationCache:
                     self._conversations_cache[conversation_id] = conversation_data
 
             logger.info(f"Saved conversation: {conversation_id}")
-            return True
+            return {
+                "success": True,
+                "total_cost": total_cost,
+                "total_input_tokens": total_input_tokens,
+                "total_output_tokens": total_output_tokens
+            }
 
         except Exception as e:
             logger.error(f"Error saving conversation {conversation_id}: {e}")
-            return False
+            return {
+                "success": False,
+                "total_cost": 0.0,
+                "total_input_tokens": 0,
+                "total_output_tokens": 0
+            }
 
     def get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
         """Get a specific conversation."""
@@ -167,7 +199,10 @@ class ConversationCache:
                 "created_date": conversation_data.get("created_date"),
                 "last_message_date": conversation_data.get("last_message_date"),
                 "title": conversation_data.get("title", "Untitled Conversation"),
-                "created_by": conversation_data.get("created_by")
+                "created_by": conversation_data.get("created_by"),
+                "total_cost": conversation_data.get("total_cost", 0.0),
+                "total_input_tokens": conversation_data.get("total_input_tokens", 0),
+                "total_output_tokens": conversation_data.get("total_output_tokens", 0)
             })
 
         # Sort by last message date (newest first)
@@ -179,12 +214,12 @@ class ConversationCache:
         return conversation_list
 
     def delete_conversation(self, conversation_id: str) -> bool:
-        """Delete a conversation from disk and cache."""
+        """Delete a conversation folder from disk and cache."""
         try:
-            # Remove from disk
-            conversation_path = os.path.join(CONVERSATIONS_DIR, f"{conversation_id}.json")
-            if os.path.exists(conversation_path):
-                os.remove(conversation_path)
+            # Remove folder from disk
+            conversation_folder = os.path.join(CONVERSATIONS_DIR, conversation_id)
+            if os.path.isdir(conversation_folder):
+                shutil.rmtree(conversation_folder)
 
             # Remove from cache
             with self._lock:
@@ -203,18 +238,165 @@ class ConversationCache:
         conversations = self.get_conversations_cache()
         return conversation_id in conversations
 
+    def save_trace(self, conversation_id: str, turn_number: int, trace_lines: List[str]) -> Optional[str]:
+        """Save trace data for a conversation turn.
+
+        Args:
+            conversation_id: The conversation ID
+            turn_number: The turn number (1-indexed)
+            trace_lines: List of JSON strings (one per event)
+
+        Returns:
+            Path to the trace file, or None if failed
+        """
+        try:
+            # Create traces folder inside conversation folder
+            traces_folder = os.path.join(CONVERSATIONS_DIR, conversation_id, "traces")
+            os.makedirs(traces_folder, exist_ok=True)
+
+            # Write trace file
+            trace_filename = f"turn_{turn_number:03d}.jsonl"
+            trace_path = os.path.join(traces_folder, trace_filename)
+
+            with open(trace_path, 'w') as f:
+                for line in trace_lines:
+                    f.write(line + '\n')
+
+            logger.info(f"Saved trace for conversation {conversation_id}, turn {turn_number}")
+
+            # Generate visualization
+            self._generate_visualization(conversation_id, turn_number, trace_lines)
+
+            return trace_path
+
+        except Exception as e:
+            logger.error(f"Error saving trace for {conversation_id}, turn {turn_number}: {e}")
+            return None
+
+    def _generate_visualization(self, conversation_id: str, turn_number: int, trace_lines: List[str]):
+        """Generate HTML visualization for a trace.
+
+        Args:
+            conversation_id: The conversation ID
+            turn_number: The turn number (1-indexed)
+            trace_lines: List of JSON strings (trace events)
+        """
+        try:
+            from core.workflow.trace_visualizer import HTMLTraceVisualizer
+
+            # Parse trace events
+            parsed_events = [json.loads(line) for line in trace_lines]
+
+            # Generate visualization
+            metadata = {
+                "conversation_id": conversation_id,
+                "turn_number": turn_number
+            }
+            visualizer = HTMLTraceVisualizer()
+            html_content = visualizer.generate(parsed_events, metadata)
+
+            # Save visualization
+            self.save_visualization(conversation_id, turn_number, html_content)
+
+        except Exception as e:
+            logger.error(f"Error generating visualization for {conversation_id}, turn {turn_number}: {e}")
+
+    def save_visualization(self, conversation_id: str, turn_number: int, html_content: str) -> Optional[str]:
+        """Save visualization HTML for a conversation turn.
+
+        Args:
+            conversation_id: The conversation ID
+            turn_number: The turn number (1-indexed)
+            html_content: The HTML content to save
+
+        Returns:
+            Path to the visualization file, or None if failed
+        """
+        try:
+            viz_folder = os.path.join(CONVERSATIONS_DIR, conversation_id, "visualizations")
+            os.makedirs(viz_folder, exist_ok=True)
+
+            viz_filename = f"turn_{turn_number:03d}.html"
+            viz_path = os.path.join(viz_folder, viz_filename)
+
+            with open(viz_path, 'w') as f:
+                f.write(html_content)
+
+            logger.info(f"Saved visualization for conversation {conversation_id}, turn {turn_number}")
+            return viz_path
+
+        except Exception as e:
+            logger.error(f"Error saving visualization for {conversation_id}, turn {turn_number}: {e}")
+            return None
+
+    def get_trace(self, conversation_id: str, turn_number: int) -> Optional[List[Dict[str, Any]]]:
+        """Get trace data for a conversation turn.
+
+        Args:
+            conversation_id: The conversation ID
+            turn_number: The turn number (1-indexed)
+
+        Returns:
+            List of trace events, or None if not found
+        """
+        try:
+            trace_filename = f"turn_{turn_number:03d}.jsonl"
+            trace_path = os.path.join(CONVERSATIONS_DIR, conversation_id, "traces", trace_filename)
+
+            if not os.path.exists(trace_path):
+                return None
+
+            events = []
+            with open(trace_path, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        events.append(json.loads(line))
+
+            return events
+
+        except Exception as e:
+            logger.error(f"Error loading trace for {conversation_id}, turn {turn_number}: {e}")
+            return None
+
+    def list_traces(self, conversation_id: str) -> List[int]:
+        """List all available trace turn numbers for a conversation.
+
+        Returns:
+            List of turn numbers that have traces
+        """
+        traces_folder = os.path.join(CONVERSATIONS_DIR, conversation_id, "traces")
+
+        if not os.path.isdir(traces_folder):
+            return []
+
+        turn_numbers = []
+        for filename in os.listdir(traces_folder):
+            if filename.startswith("turn_") and filename.endswith(".jsonl"):
+                try:
+                    # Extract turn number from filename like "turn_001.jsonl"
+                    turn_str = filename[5:-6]  # Remove "turn_" and ".jsonl"
+                    turn_numbers.append(int(turn_str))
+                except ValueError:
+                    continue
+
+        return sorted(turn_numbers)
+
 
 # Initialize the global cache instance
 _cache = ConversationCache()
 
 
-def save_conversation(conversation_id: str, data: Dict[str, Any], created_by: str = None) -> bool:
+def save_conversation(conversation_id: str, data: Dict[str, Any], created_by: str = None) -> Dict[str, Any]:
     """Save a conversation with the given data.
 
     Args:
         conversation_id: Unique identifier for the conversation
         data: Dict with 'messages' (list) and 'workflows' (dict) keys
         created_by: User ID who created the conversation
+
+    Returns:
+        Dict with 'success' (bool) and cumulative cost totals
     """
     return _cache.save_conversation(conversation_id, data, created_by)
 
@@ -269,3 +451,23 @@ def conversation_exists(conversation_id: str) -> bool:
 def invalidate_conversation_cache():
     """Force reload of conversation cache."""
     _cache.invalidate()
+
+
+def save_trace(conversation_id: str, turn_number: int, trace_lines: List[str]) -> Optional[str]:
+    """Save trace data for a conversation turn."""
+    return _cache.save_trace(conversation_id, turn_number, trace_lines)
+
+
+def save_visualization(conversation_id: str, turn_number: int, html_content: str) -> Optional[str]:
+    """Save visualization HTML for a conversation turn."""
+    return _cache.save_visualization(conversation_id, turn_number, html_content)
+
+
+def get_trace(conversation_id: str, turn_number: int) -> Optional[List[Dict[str, Any]]]:
+    """Get trace data for a conversation turn."""
+    return _cache.get_trace(conversation_id, turn_number)
+
+
+def list_traces(conversation_id: str) -> List[int]:
+    """List all available trace turn numbers for a conversation."""
+    return _cache.list_traces(conversation_id)

@@ -5,7 +5,7 @@ Outputs capture the meaningful results of a workflow execution.
 """
 
 from pydantic import BaseModel, ConfigDict
-from typing import Dict, List, Optional, Literal
+from typing import List, Optional, Literal
 
 
 # Aligned with annotation field types
@@ -21,6 +21,13 @@ class OutputField(BaseModel):
     name: str
     type: FieldType
     description: Optional[str] = None
+
+
+class FieldMapping(BaseModel):
+    """Maps a field name to a variable path."""
+    model_config = ConfigDict(extra="forbid")
+    field_name: str  # e.g., "detected", "reasoning"
+    variable_path: str  # e.g., "step_analyze.flag_state"
 
 
 class OutputDefinition(BaseModel):
@@ -86,10 +93,10 @@ class OutputMapping(BaseModel):
         Direct output (single document):
             OutputMapping(
                 output_definition_id="def_depression",
-                field_mappings={
-                    "detected": "analyze.flag_state",
-                    "reasoning": "analyze.reasoning"
-                },
+                field_mappings=[
+                    FieldMapping(field_name="detected", variable_path="analyze.flag_state"),
+                    FieldMapping(field_name="reasoning", variable_path="analyze.reasoning")
+                ],
                 evidence=[
                     EvidenceMapping(resource_type="note", id_path="loop.note.note_id")
                 ],
@@ -99,10 +106,10 @@ class OutputMapping(BaseModel):
         Aggregated output with document references:
             OutputMapping(
                 output_definition_id="def_combined",
-                field_mappings={
-                    "input_text": "aggregate.combined_text",
-                    "detected": "final.flag_state"
-                },
+                field_mappings=[
+                    FieldMapping(field_name="input_text", variable_path="aggregate.combined_text"),
+                    FieldMapping(field_name="detected", variable_path="final.flag_state")
+                ],
                 evidence=[
                     EvidenceMapping(resource_type="note", id_path="matched_notes[0].note_id"),
                     EvidenceMapping(resource_type="medication", id_path="med.order_id")
@@ -112,7 +119,7 @@ class OutputMapping(BaseModel):
         Aggregated output without explicit document references:
             OutputMapping(
                 output_definition_id="def_summary",
-                field_mappings={"summary": "summarize.text"},
+                field_mappings=[FieldMapping(field_name="summary", variable_path="summarize.text")],
                 evidence=[]  # No document links, just show the summary
             )
     """
@@ -121,8 +128,8 @@ class OutputMapping(BaseModel):
     output_definition_id: str
 
     # Maps field name → variable path
-    # e.g., {"detected": "step_analyze.flag_state", "reasoning": "step_analyze.reasoning"}
-    field_mappings: Dict[str, str]
+    # e.g., [FieldMapping(field_name="detected", variable_path="step_analyze.flag_state")]
+    field_mappings: List[FieldMapping] = []
 
     # Evidence: which documents this output references
     # - Empty list: no document references (pure computation/aggregation)

@@ -15,33 +15,7 @@ import {
   Close as CloseIcon,
   Highlight as EvidenceIcon
 } from '@mui/icons-material';
-import { parseHighlightedText } from '../../../utils/highlightParser';
-
-// Client-side function to find span in text and wrap with highlight tags
-const highlightSpanInText = (text, spanText) => {
-  if (!text || !spanText) return text || '';
-
-  // Normalize whitespace for matching
-  const normalizedText = text.replace(/\s+/g, ' ').trim();
-  const normalizedSpan = spanText.replace(/\s+/g, ' ').trim();
-
-  // Case-insensitive search
-  const lowerText = normalizedText.toLowerCase();
-  const lowerSpan = normalizedSpan.toLowerCase();
-
-  const startIdx = lowerText.indexOf(lowerSpan);
-  if (startIdx === -1) {
-    // Span not found - return original text with span appended
-    return `${text}\n\n[Extracted span - not found verbatim in text]:\n${spanText}`;
-  }
-
-  const endIdx = startIdx + normalizedSpan.length;
-  return (
-    normalizedText.slice(0, startIdx) +
-    '<highlight>' + normalizedText.slice(startIdx, endIdx) + '</highlight>' +
-    normalizedText.slice(endIdx)
-  );
-};
+import { insertHighlightTags, renderHighlightedText } from '../../../utils/highlightUtils';
 
 const EvidenceNoteViewer = ({ open, onClose, evidenceData }) => {
   if (!evidenceData) {
@@ -61,7 +35,7 @@ const EvidenceNoteViewer = ({ open, onClose, evidenceData }) => {
   };
 
   // Generate highlighted text client-side
-  const highlightedText = highlightSpanInText(noteText, span);
+  const highlightedText = insertHighlightTags(noteText, span);
   const hasNoteText = !!noteText;
 
   // Fallback view when note text is not available
@@ -242,7 +216,7 @@ const EvidenceNoteViewer = ({ open, onClose, evidenceData }) => {
               lineHeight: 1.6
             }}
           >
-            {highlightedText ? parseHighlightedText(highlightedText) : 'No evidence text available.'}
+            {highlightedText ? renderHighlightedText(highlightedText) : 'No evidence text available.'}
           </Typography>
         </Box>
 

@@ -499,8 +499,8 @@ const ProjectWorkflowResultsTab = ({ project }) => {
                 <MenuItem disabled>No workflows available</MenuItem>
               )}
               {availableWorkflows.map((workflow) => (
-                <MenuItem key={workflow.plan_name} value={workflow.plan_name}>
-                  {workflow.plan_name}
+                <MenuItem key={workflow.workflow_name} value={workflow.workflow_name}>
+                  {workflow.workflow_name}
                 </MenuItem>
               ))}
             </Select>

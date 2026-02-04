@@ -5,7 +5,9 @@ import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Generator, Optional
+from typing import Dict, Any, Generator, Optional, Tuple
+
+from pydantic import BaseModel
 
 from core.llm_provider import call
 
@@ -36,6 +38,7 @@ from .agents import (
     OutputDefinitionAgent,
 )
 from .utils.tool_specs import get_tool_specs_for_agents
+from .trace_recorder import TraceRecorder
 
 
 class WorkflowOrchestrator:
@@ -97,7 +100,6 @@ Always provide agent_task with clear instructions for the agent you're calling."
         """Get prompt guides for tools that need prompts."""
         # Simple hardcoded guides for now
         return {
-            "highlight_patient_note": "Generate prompts to highlight specific information in clinical notes.",
             "analyze_note_with_span_and_reason": "Generate prompts to analyze notes and provide explanations with spans.",
             "summarize_note": "Generate prompts to summarize clinical notes.",
         }
@@ -124,10 +126,16 @@ Always provide agent_task with clear instructions for the agent you're calling."
     def process_message_streaming(
         self,
         user_message: str,
-        state: WorkflowAgentState
+        state: WorkflowAgentState,
+        trace_recorder: Optional[TraceRecorder] = None
     ) -> Generator[TraceEvent, None, None]:
         """
         Streaming entry point. Processes user message and yields trace events.
+
+        Args:
+            user_message: The user's message
+            state: The workflow agent state
+            trace_recorder: Optional recorder for detailed tracing
 
         Yields:
             DecisionEvent - when orchestrator decides next action
@@ -138,76 +146,160 @@ Always provide agent_task with clear instructions for the agent you're calling."
         state.add_user_message(user_message)
         state.agent_call_log = []  # Clear log at start of new message
 
+        # Record turn start and initial state if tracing
+        if trace_recorder:
+            trace_recorder.record_turn_start(user_message)
+            trace_recorder.record_initial_state(state)
+
+        # Track running cost totals
+        total_cost = 0.0
+        total_input_tokens = 0
+        total_output_tokens = 0
+
         max_iterations = 20  # Safety limit
         iteration = 0
 
-        while iteration < max_iterations:
-            iteration += 1
+        try:
+            while iteration < max_iterations:
+                iteration += 1
 
-            # Ask orchestrator LLM what to do next
-            decision = self._get_orchestrator_decision(state, user_message)
+                # Ask orchestrator LLM what to do next
+                decision, context, system_prompt, decision_cost, decision_input_tokens, decision_output_tokens = self._get_orchestrator_decision(state, user_message)
+                total_cost += decision_cost
+                total_input_tokens += decision_input_tokens
+                total_output_tokens += decision_output_tokens
 
-            # Yield decision event
-            yield DecisionEvent(
-                action=decision.action,
-                agent_task=decision.agent_task,
-                reasoning=decision.reasoning,
-                timestamp=datetime.now()
-            )
+                # Record decision if tracing
+                if trace_recorder:
+                    trace_recorder.record_decision(
+                        orchestrator_context=context,
+                        decision=decision,
+                        cost=decision_cost,
+                        input_tokens=decision_input_tokens,
+                        output_tokens=decision_output_tokens,
+                        system_prompt=system_prompt
+                    )
 
-            if decision.action == "respond_to_user":
-                result = self._build_response(decision, state)
-                yield FinalEvent(result=result, timestamp=datetime.now())
-                return
+                # Yield decision event
+                yield DecisionEvent(
+                    action=decision.action,
+                    agent_task=decision.agent_task,
+                    reasoning=decision.reasoning,
+                    timestamp=datetime.now()
+                )
 
-            # Call the appropriate agent with timing
-            start_time = time.time()
-            agent_result = self._call_agent(decision, state)
-            duration_ms = int((time.time() - start_time) * 1000)
+                if decision.action == "respond_to_user":
+                    result = self._build_response(decision, state, total_cost, total_input_tokens, total_output_tokens)
 
-            # Generate summary
-            agent_name = decision.action.replace("call_", "")
-            success, summary = self._generate_agent_summary(agent_name, agent_result)
+                    # Record final state and finalize trace
+                    if trace_recorder:
+                        trace_recorder.record_state_snapshot(state, trigger="final")
+                        trace_recorder.finalize(total_cost, total_input_tokens, total_output_tokens)
 
-            # Yield agent result event
-            yield AgentResultEvent(
-                agent=agent_name,
-                success=success,
-                summary=summary,
-                duration_ms=duration_ms,
-                timestamp=datetime.now()
-            )
+                    yield FinalEvent(result=result, timestamp=datetime.now())
+                    return
 
-            # Log the agent call (for orchestrator context)
-            state.agent_call_log.append({
-                "agent": agent_name,
-                "success": success,
-                "summary": summary
-            })
+                # Build agent input and record it
+                agent_name = decision.action.replace("call_", "")
+                agent_input = self._build_agent_input(decision, state)
 
-            # Update state with result
-            state.last_agent = agent_name
-            state.last_agent_result = agent_result
+                # Record agent input if tracing
+                if trace_recorder and agent_input:
+                    trace_recorder.record_agent_input(agent_name, agent_input)
 
-            # Handle specific agent results
-            self._process_agent_result(decision.action, agent_result, state)
+                # Call the appropriate agent with timing
+                start_time = time.time()
+                agent_result = self._call_agent_with_input(agent_name, agent_input)
+                duration_ms = int((time.time() - start_time) * 1000)
 
-        # Max iterations reached
-        logger.warning(f"[orchestrator] max iterations ({max_iterations}) reached")
-        result = {
-            "response_type": "text",
-            "text": "I was unable to complete the workflow generation. Please try again.",
-            "workflow": None,
-            "summary": None
-        }
-        yield FinalEvent(result=result, timestamp=datetime.now())
+                # Extract agent cost/tokens
+                agent_cost = getattr(agent_result, 'cost', None) or 0.0
+                agent_input_tokens = getattr(agent_result, 'input_tokens', None) or 0
+                agent_output_tokens = getattr(agent_result, 'output_tokens', None) or 0
+                total_cost += agent_cost
+                total_input_tokens += agent_input_tokens
+                total_output_tokens += agent_output_tokens
+
+                # Record agent output if tracing
+                if trace_recorder:
+                    trace_recorder.record_agent_output(
+                        agent=agent_name,
+                        output_obj=agent_result,
+                        duration_ms=duration_ms,
+                        cost=agent_cost,
+                        input_tokens=agent_input_tokens,
+                        output_tokens=agent_output_tokens
+                    )
+
+                # Generate summary
+                success, summary = self._generate_agent_summary(agent_name, agent_result)
+
+                # Yield agent result event with cost info
+                yield AgentResultEvent(
+                    agent=agent_name,
+                    success=success,
+                    summary=summary,
+                    duration_ms=duration_ms,
+                    timestamp=datetime.now(),
+                    cost=agent_cost,
+                    input_tokens=agent_input_tokens,
+                    output_tokens=agent_output_tokens
+                )
+
+                # Log the agent call (for orchestrator context)
+                state.agent_call_log.append({
+                    "agent": agent_name,
+                    "success": success,
+                    "summary": summary
+                })
+
+                # Update state with result
+                state.last_agent = agent_name
+                state.last_agent_result = agent_result
+
+                # Handle specific agent results
+                self._process_agent_result(decision.action, agent_result, state)
+
+                # Record state snapshot after processing if tracing
+                if trace_recorder:
+                    trace_recorder.record_state_snapshot(state, trigger=f"after_{agent_name}")
+
+            # Max iterations reached
+            logger.warning(f"[orchestrator] max iterations ({max_iterations}) reached")
+            result = {
+                "response_type": "text",
+                "text": "I was unable to complete the workflow generation. Please try again.",
+                "workflow": None,
+                "summary": None,
+                "total_cost": total_cost,
+                "total_input_tokens": total_input_tokens,
+                "total_output_tokens": total_output_tokens
+            }
+
+            # Finalize trace on max iterations
+            if trace_recorder:
+                trace_recorder.record_error("Max iterations reached")
+                trace_recorder.finalize(total_cost, total_input_tokens, total_output_tokens)
+
+            yield FinalEvent(result=result, timestamp=datetime.now())
+
+        except Exception as e:
+            # Record error and finalize trace
+            if trace_recorder:
+                trace_recorder.record_error(str(e))
+                trace_recorder.finalize(total_cost, total_input_tokens, total_output_tokens)
+            raise
 
     def _get_orchestrator_decision(
         self,
         state: WorkflowAgentState,
         user_message: str
-    ) -> OrchestratorDecision:
-        """Call orchestrator LLM to decide next action."""
+    ) -> Tuple[OrchestratorDecision, str, str, float, int, int]:
+        """Call orchestrator LLM to decide next action.
+
+        Returns:
+            (decision, context_string, system_prompt, cost, input_tokens, output_tokens)
+        """
 
         # Build context
         context_parts = [f"USER MESSAGE: {user_message}"]
@@ -265,25 +357,34 @@ Decide what to do next. If the workflow is ready and summarized, respond to user
             task_preview = f" (task: {decision.agent_task[:60]}...)" if decision.agent_task and len(decision.agent_task) > 60 else (f" (task: {decision.agent_task})" if decision.agent_task else "")
             logger.info(f"[orchestrator] decision: {decision.action}{task_preview}")
             logger.debug(f"[orchestrator] full decision: {decision.model_dump_json()}")
-            return decision
+            return decision, context, system_prompt, result.cost, result.input_tokens, result.output_tokens
 
         # Fallback: respond to user
         logger.warning("[orchestrator] failed to parse decision, falling back to respond_to_user")
-        return OrchestratorDecision(
-            action="respond_to_user",
-            response_text="I encountered an issue deciding the next step. Please try again."
+        return (
+            OrchestratorDecision(
+                action="respond_to_user",
+                response_text="I encountered an issue deciding the next step. Please try again."
+            ),
+            context,
+            system_prompt,
+            result.cost,
+            result.input_tokens,
+            result.output_tokens
         )
 
     def _format_agent_result(self, agent_name: str, result: Any) -> str:
-        """Format agent result for context."""
+        """Format agent result for context. Includes full workflow JSON (B2)."""
         if result is None:
             return "No result"
 
         if hasattr(result, 'model_dump'):
-            data = result.model_dump()
-            # Keep it concise
-            if 'workflow' in data:
-                data['workflow'] = "[Workflow object]" if data['workflow'] else None
+            data = result.model_dump(by_alias=True)
+            # Strip cost/token fields - not needed in LLM context
+            data.pop('cost', None)
+            data.pop('input_tokens', None)
+            data.pop('output_tokens', None)
+            # B2: Include full workflow JSON instead of placeholder
             return json.dumps(data, default=str)
 
         return str(result)
@@ -325,96 +426,101 @@ Decide what to do next. If the workflow is ready and summarized, respond to user
 
         return True, "completed"
 
-    def _call_agent(self, decision: OrchestratorDecision, state: WorkflowAgentState) -> Any:
-        """Route to appropriate agent based on decision."""
+    def _build_agent_input(self, decision: OrchestratorDecision, state: WorkflowAgentState) -> Optional[BaseModel]:
+        """Build the input object for an agent based on decision."""
         action = decision.action
 
         if action == "call_clarifier":
-            inputs = ClarifierInput(
+            return ClarifierInput(
                 user_request=decision.agent_task or state.conversation[-1].content,
                 tool_specs=self.tool_specs,
                 current_workflow=state.get_current_workflow()
             )
-            return self.agents["clarifier"].run(inputs)
 
         elif action == "call_generator":
-            inputs = GeneratorInput(
+            return GeneratorInput(
                 task_description=decision.agent_task or state.conversation[-1].content,
                 tool_specs=self.tool_specs,
                 patient_context={"mrn": state.mrn, "csn": state.csn}
             )
-            return self.agents["generator"].run(inputs)
 
         elif action == "call_editor":
             current = state.pending_workflow or state.get_current_workflow()
             if not current:
-                return {"success": False, "error_message": "No workflow to edit"}
-
-            inputs = EditorInput(
+                return None
+            return EditorInput(
                 current_workflow=current,
                 edit_request=decision.agent_task or "",
                 tool_specs=self.tool_specs
             )
-            return self.agents["editor"].run(inputs)
 
         elif action == "call_chunk_operator":
             current = state.pending_workflow or state.get_current_workflow()
             if not current:
-                return {"success": False, "error_message": "No workflow for chunk operation"}
-
-            inputs = ChunkOperatorInput(
+                return None
+            return ChunkOperatorInput(
                 current_workflow=current,
                 operation=decision.chunk_operation or "append",
                 description=decision.agent_task or "",
                 tool_specs=self.tool_specs
             )
-            return self.agents["chunk_operator"].run(inputs)
 
         elif action == "call_validator":
             workflow = state.pending_workflow or state.get_current_workflow()
             if not workflow:
-                return {"valid": False, "broken_reason": "No workflow to validate"}
-
-            inputs = ValidatorInput(workflow=workflow)
-            return self.agents["validator"].run(inputs)
+                return None
+            return ValidatorInput(workflow=workflow)
 
         elif action == "call_prompt_filler":
             workflow = state.pending_workflow or state.get_current_workflow()
             if not workflow:
-                return {"success": False, "error_message": "No workflow for prompt filling"}
-
-            # Get user intent from conversation
+                return None
             user_intent = state.conversation[-1].content if state.conversation else ""
-
-            inputs = PromptFillerInput(
+            return PromptFillerInput(
                 workflow=workflow,
                 user_intent=user_intent,
                 prompt_guides=self._prompt_guides
             )
-            return self.agents["prompt_filler"].run(inputs)
 
         elif action == "call_summarizer":
             workflow = state.pending_workflow or state.get_current_workflow()
             if not workflow:
-                return {"summary": "No workflow to summarize."}
-
-            inputs = SummarizerInput(workflow=workflow)
-            return self.agents["summarizer"].run(inputs)
+                return None
+            return SummarizerInput(workflow=workflow)
 
         elif action == "call_output_definition":
             workflow = state.pending_workflow or state.get_current_workflow()
             if not workflow:
-                return {"success": False, "error_message": "No workflow for output definition"}
-
+                return None
             user_intent = state.conversation[-1].content if state.conversation else ""
-
-            inputs = OutputDefinitionInput(
+            return OutputDefinitionInput(
                 workflow=workflow,
                 user_intent=user_intent
             )
-            return self.agents["output_definition"].run(inputs)
 
         return None
+
+    def _call_agent_with_input(self, agent_name: str, agent_input: Optional[BaseModel]) -> Any:
+        """Call an agent with the given input."""
+        if agent_input is None:
+            # Return error dict for missing input
+            if agent_name == "validator":
+                return {"valid": False, "broken_reason": "No workflow to validate"}
+            elif agent_name == "summarizer":
+                return {"summary": "No workflow to summarize."}
+            else:
+                return {"success": False, "error_message": f"No input for {agent_name}"}
+
+        if agent_name not in self.agents:
+            return {"success": False, "error_message": f"Unknown agent: {agent_name}"}
+
+        return self.agents[agent_name].run(agent_input)
+
+    def _call_agent(self, decision: OrchestratorDecision, state: WorkflowAgentState) -> Any:
+        """Route to appropriate agent based on decision. Legacy method for compatibility."""
+        agent_name = decision.action.replace("call_", "")
+        agent_input = self._build_agent_input(decision, state)
+        return self._call_agent_with_input(agent_name, agent_input)
 
     def _process_agent_result(self, action: str, result: Any, state: WorkflowAgentState):
         """Update state based on agent result."""
@@ -437,11 +543,18 @@ Decide what to do next. If the workflow is ready and summarized, respond to user
     def _build_response(
         self,
         decision: OrchestratorDecision,
-        state: WorkflowAgentState
+        state: WorkflowAgentState,
+        total_cost: float,
+        total_input_tokens: int,
+        total_output_tokens: int
     ) -> Dict[str, Any]:
         """Build final response for user."""
 
         response_text = decision.response_text or ""
+
+        # Append workflow summary when returning a workflow
+        if decision.include_workflow and state.pending_summary:
+            response_text += f"\n\nHere's the summary of the new workflow:\n{state.pending_summary}"
         workflow = None
         summary = None
 
@@ -463,7 +576,10 @@ Decide what to do next. If the workflow is ready and summarized, respond to user
                 "text": response_text,
                 "workflow": workflow,
                 "summary": summary,
-                "workflow_id": workflow_id
+                "workflow_id": workflow_id,
+                "total_cost": total_cost,
+                "total_input_tokens": total_input_tokens,
+                "total_output_tokens": total_output_tokens
             }
         else:
             # Text-only response
@@ -474,6 +590,8 @@ Decide what to do next. If the workflow is ready and summarized, respond to user
                 "response_type": "text",
                 "text": response_text,
                 "workflow": None,
-                "summary": None
+                "summary": None,
+                "total_cost": total_cost,
+                "total_input_tokens": total_input_tokens,
+                "total_output_tokens": total_output_tokens
             }
-

@@ -85,7 +85,6 @@ const getKeyParameters = (toolName, inputs) => {
     'get_patient_notes_ids': ['mrn'],
     'read_patient_note': ['note_id'],
     'summarize_patient_note': ['note_id', 'focus'],
-    'highlight_patient_note': ['note_id', 'focus'],
     'store_note_result': ['note_id', 'result_type'],
     'read_flowsheets_table': ['mrn', 'table_name'],
     'summarize_flowsheets_table': ['table_data'],

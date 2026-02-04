@@ -18,6 +18,9 @@ class GeneratorOutput(BaseModel):
     workflow: Optional[Workflow] = None
     success: bool
     error_message: Optional[str] = None
+    cost: Optional[float] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
 
 
 class EditorInput(BaseModel):
@@ -32,6 +35,9 @@ class EditorOutput(BaseModel):
     workflow: Optional[Workflow] = None
     success: bool
     error_message: Optional[str] = None
+    cost: Optional[float] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
 
 
 class ChunkOperatorInput(BaseModel):
@@ -47,6 +53,9 @@ class ChunkOperatorOutput(BaseModel):
     workflow: Optional[Workflow] = None
     success: bool
     error_message: Optional[str] = None
+    cost: Optional[float] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
 
 
 class ValidatorInput(BaseModel):
@@ -59,6 +68,9 @@ class ValidatorOutput(BaseModel):
     valid: bool
     broken_step_id: Optional[str] = None
     broken_reason: Optional[str] = None
+    cost: Optional[float] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
 
 
 class PromptFillerInput(BaseModel):
@@ -73,6 +85,9 @@ class PromptFillerOutput(BaseModel):
     workflow: Workflow
     success: bool
     error_message: Optional[str] = None
+    cost: Optional[float] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
 
 
 class SummarizerInput(BaseModel):
@@ -83,6 +98,9 @@ class SummarizerInput(BaseModel):
 class SummarizerOutput(BaseModel):
     """Output from the summarizer agent."""
     summary: str
+    cost: Optional[float] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
 
 
 class ClarifierInput(BaseModel):
@@ -98,6 +116,9 @@ class ClarifierOutput(BaseModel):
     questions: List[str] = []
     out_of_scope: bool = False
     out_of_scope_reason: Optional[str] = None
+    cost: Optional[float] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
 
 
 class OutputDefinitionInput(BaseModel):
@@ -111,3 +132,6 @@ class OutputDefinitionOutput(BaseModel):
     workflow: Optional[Workflow] = None  # Plan with output_definitions and output_mappings filled
     success: bool
     error_message: Optional[str] = None
+    cost: Optional[float] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None

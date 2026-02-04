@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 logger = logging.getLogger("workflow.agents")
 
@@ -69,12 +69,18 @@ Be specific and actionable in your prompts."""
             workflow = inputs.workflow.model_copy(deep=True)
 
             # Process steps as Pydantic objects (in-place modification)
-            self._process_steps(workflow.steps, inputs.user_intent, inputs.prompt_guides)
+            # Returns accumulated cost/tokens from all LLM calls
+            total_cost, total_input_tokens, total_output_tokens = self._process_steps(
+                workflow.steps, inputs.user_intent, inputs.prompt_guides
+            )
 
             logger.info(f"[{self.name}] success")
             return PromptFillerOutput(
                 workflow=workflow,
-                success=True
+                success=True,
+                cost=total_cost,
+                input_tokens=total_input_tokens,
+                output_tokens=total_output_tokens
             )
 
         except Exception as e:
@@ -90,29 +96,44 @@ Be specific and actionable in your prompts."""
         steps: List[AllSteps],
         user_intent: str,
         prompt_guides: dict
-    ) -> None:
-        """Process steps in-place and fill null prompts."""
+    ) -> Tuple[float, int, int]:
+        """Process steps in-place and fill null prompts. Returns (cost, input_tokens, output_tokens)."""
+        total_cost = 0.0
+        total_input_tokens = 0
+        total_output_tokens = 0
+
         for step in steps:
             if isinstance(step, ToolStep):
                 # Check if inputs has a prompt field that is None
                 if hasattr(step.inputs, 'prompt') and step.inputs.prompt is None:
                     tool_name = step.tool
                     guide = prompt_guides.get(tool_name, '')
-                    filled_prompt = self._generate_prompt(
+                    filled_prompt, cost, input_tokens, output_tokens = self._generate_prompt(
                         tool_name=tool_name,
                         step=step,
                         user_intent=user_intent,
                         guide=guide
                     )
+                    total_cost += cost
+                    total_input_tokens += input_tokens
+                    total_output_tokens += output_tokens
                     if filled_prompt:
                         step.inputs.prompt = PromptInput(**filled_prompt)
 
             elif isinstance(step, LoopStep):
-                self._process_steps(step.body, user_intent, prompt_guides)
+                cost, input_tokens, output_tokens = self._process_steps(step.body, user_intent, prompt_guides)
+                total_cost += cost
+                total_input_tokens += input_tokens
+                total_output_tokens += output_tokens
 
             elif isinstance(step, IfStep):
                 # Process the 'then' branch (which is a single step)
-                self._process_steps([step.then], user_intent, prompt_guides)
+                cost, input_tokens, output_tokens = self._process_steps([step.then], user_intent, prompt_guides)
+                total_cost += cost
+                total_input_tokens += input_tokens
+                total_output_tokens += output_tokens
+
+        return total_cost, total_input_tokens, total_output_tokens
 
     def _generate_prompt(
         self,
@@ -120,10 +141,10 @@ Be specific and actionable in your prompts."""
         step: ToolStep,
         user_intent: str,
         guide: str
-    ) -> dict:
-        """Generate a prompt for a specific tool step."""
+    ) -> Tuple[dict, float, int, int]:
+        """Generate a prompt for a specific tool step. Returns (prompt_dict, cost, input_tokens, output_tokens)."""
         try:
-            step_str = step.model_dump_json(indent=2)
+            step_str = step.model_dump_json(indent=2, by_alias=True)
 
             system_prompt = f"""{self._prompt}
 
@@ -151,18 +172,35 @@ Generate a prompt that aligns with the user's intent and the tool's purpose."""
             )
 
             if result.parsed:
-                return {
-                    "system_prompt": result.parsed.system_prompt,
-                    "user_prompt": result.parsed.user_prompt,
-                    "examples": None
-                }
+                return (
+                    {
+                        "system_prompt": result.parsed.system_prompt,
+                        "user_prompt": result.parsed.user_prompt,
+                        "examples": None
+                    },
+                    result.cost,
+                    result.input_tokens,
+                    result.output_tokens
+                )
+            else:
+                return (
+                    None,
+                    result.cost,
+                    result.input_tokens,
+                    result.output_tokens
+                )
 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[{self.name}] prompt generation failed for {tool_name}: {e}")
 
-        # Fallback: generate a basic prompt
-        return {
-            "system_prompt": f"You are an assistant helping with {tool_name}.",
-            "user_prompt": "Please process the input.",
-            "examples": None
-        }
+        # Fallback: generate a basic prompt (no LLM call, so zero cost)
+        return (
+            {
+                "system_prompt": f"You are an assistant helping with {tool_name}.",
+                "user_prompt": "Please process the input.",
+                "examples": None
+            },
+            0.0,
+            0,
+            0
+        )

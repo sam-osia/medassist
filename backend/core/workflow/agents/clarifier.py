@@ -68,7 +68,7 @@ Guidelines:
                 current_workflow_context = f"""
 
 CURRENT WORKFLOW:
-{inputs.current_workflow.model_dump_json(indent=2)}
+{inputs.current_workflow.model_dump_json(indent=2, by_alias=True)}
 """
 
             system_prompt = f"""{self._prompt}
@@ -96,12 +96,20 @@ Analyze whether the user's request is clear and achievable."""
                     ready=result.parsed.ready,
                     questions=result.parsed.questions,
                     out_of_scope=result.parsed.out_of_scope,
-                    out_of_scope_reason=result.parsed.out_of_scope_reason if result.parsed.out_of_scope else None
+                    out_of_scope_reason=result.parsed.out_of_scope_reason if result.parsed.out_of_scope else None,
+                    cost=result.cost,
+                    input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens
                 )
             else:
                 # Assume ready if parsing fails
                 logger.warning(f"[{self.name}] parsing failed, assuming ready=True")
-                return ClarifierOutput(ready=True)
+                return ClarifierOutput(
+                    ready=True,
+                    cost=result.cost,
+                    input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens
+                )
 
         except Exception as e:
             # Assume ready on error to not block

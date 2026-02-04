@@ -4,18 +4,21 @@ from pydantic import BaseModel, Field, ConfigDict
 from core.workflow.schemas.output_schemas import OutputDefinition, OutputMapping
 from core.workflow.schemas.tool_inputs import (
     GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput,
-    HighlightPatientNoteInput, AnalyzeNoteWithSpanAndReasonInput,
+    AnalyzeNoteWithSpanAndReasonInput,
     ReadFlowsheetsTableInput, SummarizeFlowsheetsTableInput, GetMedicationsIdsInput,
     ReadMedicationInput, GetDiagnosisIdsInput, ReadDiagnosisInput,
-    KeywordCountInput, IdentifyFlagInput, AnalyzeFlowsheetInstanceInput
+    KeywordCountInput, AnalyzeFlowsheetInstanceInput,
+    InitStoreInput, StoreAppendInput, StoreReadInput, BuildTextInput
 )
 
 ToolInput = Union[
     GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput,
-    HighlightPatientNoteInput, AnalyzeNoteWithSpanAndReasonInput, ReadFlowsheetsTableInput,
+    AnalyzeNoteWithSpanAndReasonInput, ReadFlowsheetsTableInput,
     SummarizeFlowsheetsTableInput, GetMedicationsIdsInput, ReadMedicationInput,
-    GetDiagnosisIdsInput, ReadDiagnosisInput, KeywordCountInput, IdentifyFlagInput,
-    AnalyzeFlowsheetInstanceInput
+    GetDiagnosisIdsInput, ReadDiagnosisInput, KeywordCountInput,
+    AnalyzeFlowsheetInstanceInput,
+    # Variable Management
+    InitStoreInput, StoreAppendInput, StoreReadInput, BuildTextInput
 ]
 
 # ---------- Condition Types ----------

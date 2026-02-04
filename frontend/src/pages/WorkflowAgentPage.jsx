@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Container,
@@ -143,6 +143,13 @@ const WorkflowAgentPage = () => {
   // Trace state for streaming display
   const [activeTrace, setActiveTrace] = useState([]);
 
+  // Cost tracking
+  const [totalCost, setTotalCost] = useState(0);
+
+  // Auto-scroll refs
+  const messagesContainerRef = useRef(null);
+  const isNearBottomRef = useRef(true); // Start true so initial messages scroll
+
   // Selected workflow state - tracks which workflow is currently displayed
   const [selectedWorkflowId, setSelectedWorkflowId] = useState(null);
 
@@ -159,6 +166,20 @@ const WorkflowAgentPage = () => {
       return () => clearTimeout(timer);
     }
   }, [saveSuccess]);
+
+  // Auto-scroll to bottom when messages or trace update (if user is near bottom)
+  useEffect(() => {
+    if (isNearBottomRef.current && messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  }, [conversation.messages, activeTrace]);
+
+  const handleMessagesScroll = () => {
+    if (!messagesContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    // Consider "near bottom" if within 100px of the bottom
+    isNearBottomRef.current = scrollHeight - scrollTop - clientHeight < 100;
+  };
 
 
   const fetchSavedWorkflows = async () => {
@@ -197,6 +218,7 @@ const WorkflowAgentPage = () => {
       const messages = (response.data.messages || []).map(ensureMessageId);
       const workflows = response.data.workflows || {};
       setConversation({ messages, workflows });
+      setTotalCost(response.data.total_cost || 0);
 
       // Find last workflow reference and display it
       const lastWorkflowMsg = [...messages].reverse().find(m => m.workflow_ref);
@@ -241,6 +263,7 @@ const WorkflowAgentPage = () => {
     setConversation({ messages: [], workflows: {} });
     setChatInput('');
     setActiveTrace([]);
+    setTotalCost(0);
   };
 
   const handleDeleteConversation = async (convId) => {
@@ -371,6 +394,7 @@ const WorkflowAgentPage = () => {
               setActiveTrace([...collectedTrace]);
             } else if (eventData.event === 'final') {
               removeLoadingMessage();
+              setTotalCost(eventData.total_cost || 0);
 
               if (eventData.response_type === "text") {
                 addMessageToConversation({
@@ -683,6 +707,7 @@ const WorkflowAgentPage = () => {
               setActiveTrace([...collectedTrace]);
             } else if (eventData.event === 'final') {
               removeLoadingMessage();
+              setTotalCost(eventData.total_cost || 0);
 
               if (eventData.response_type === "text") {
                 addMessageToConversation({
@@ -929,6 +954,8 @@ const WorkflowAgentPage = () => {
 
                     {/* Message History */}
                     <Box
+                      ref={messagesContainerRef}
+                      onScroll={handleMessagesScroll}
                       sx={{
                         flex: 1,
                         overflowY: 'auto',
@@ -1088,6 +1115,11 @@ const WorkflowAgentPage = () => {
                         </Box>
                       </Box>
                     </Box>
+                    {totalCost > 0 && (
+                      <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                        Total cost: ${totalCost.toFixed(4)}
+                      </Typography>
+                    )}
                   </CardContent>
                 </Card>
               )}

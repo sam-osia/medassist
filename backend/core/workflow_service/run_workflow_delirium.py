@@ -3,7 +3,7 @@ import logging
 from typing import List, Dict
 
 from core.workflow.tools.notes import (
-    GetPatientNotesIds, ReadPatientNote, IdentifyFlag
+    GetPatientNotesIds, ReadPatientNote, AnalyzeNoteWithSpanAndReason
 )
 from core.workflow.tools.medications import (
     GetMedicationsIds, ReadMedication
@@ -16,9 +16,9 @@ from core.workflow.tools.diagnosis import (
 )
 from core.data.dataloader import get_patient_details
 from core.workflow.schemas.tool_inputs import (
-    GetPatientNotesIdsInput, ReadPatientNoteInput, IdentifyFlagInput,
+    GetPatientNotesIdsInput, ReadPatientNoteInput, AnalyzeNoteWithSpanAndReasonInput,
     GetMedicationsIdsInput, ReadMedicationInput, GetDiagnosisIdsInput, ReadDiagnosisInput,
-    AnalyzeFlowsheetInstanceInput
+    AnalyzeFlowsheetInstanceInput, PromptInput
 )
 from core.workflow_service.utils import (
     create_output_definition, create_output_value,
@@ -115,7 +115,8 @@ def _build_output_definitions() -> Dict[str, dict]:
             resource_type=RESOURCE_TYPE_NOTE,
             fields=[
                 {"name": "detected", "type": FIELD_TYPE_BOOLEAN},
-                {"name": "highlighted_text", "type": FIELD_TYPE_TEXT}
+                {"name": "span", "type": FIELD_TYPE_TEXT},
+                {"name": "reasoning", "type": FIELD_TYPE_TEXT}
             ],
             metadata={"criteria": criteria_config["criteria"]}
         )
@@ -330,7 +331,7 @@ def check_flowsheets(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
 
 def analyze_single_note_for_flag(note_text, note_dict, note_id, flag_key, criteria_config, mrn, csn, definitions: Dict[str, dict]):
     """
-    Analyze a single note for a specific flag criteria.
+    Analyze a single note for a specific flag criteria using AnalyzeNoteWithSpanAndReason.
 
     Returns an output value entry if detected, None otherwise.
     """
@@ -338,12 +339,38 @@ def analyze_single_note_for_flag(note_text, note_dict, note_id, flag_key, criter
     criteria_text = criteria_config["criteria"]
     definition = definitions[flag_key]
 
-    # Use IdentifyFlag tool to check for the criteria
-    flag_result = IdentifyFlag(dataset=DATASET)(inputs=IdentifyFlagInput(text=note_text, criteria=criteria_text))
+    # Build prompt with criteria embedded
+    prompt = PromptInput(
+        system_prompt="""You are a medical text analysis assistant. Your task is to determine if specific criteria are met in clinical notes.
 
-    print(f"{criteria_name} Analysis: {flag_result.flag_state}")
+Your responsibilities:
+1. Analyze the text for the specified criteria
+2. Consider semantic equivalents and contextually relevant information
+3. Exclude negated mentions - if the text explicitly negates the criteria, do not raise the flag
+4. Return:
+   - flag_state: true if criteria are clearly met, false otherwise
+   - span: the exact text portion that triggered the flag (empty string if not met)
+   - reasoning: brief explanation for the decision (empty string if not met)
 
-    if not flag_result.flag_state:
+Be precise and conservative - only raise flags when criteria are clearly met.""",
+        user_prompt=f"""Analyze this clinical note for the following criteria:
+
+Criteria: {criteria_text}
+
+Note:
+{{{{note}}}}
+
+If the criteria are met, extract the exact span of text that supports it and explain your reasoning."""
+    )
+
+    # Use AnalyzeNoteWithSpanAndReason tool
+    result = AnalyzeNoteWithSpanAndReason(dataset=DATASET)(
+        inputs=AnalyzeNoteWithSpanAndReasonInput(note=note_text, prompt=prompt)
+    )
+
+    print(f"{criteria_name} Analysis: {result.flag_state}")
+
+    if not result.flag_state:
         print(f"  {criteria_name} NOT detected in this note")
         return None
 
@@ -354,7 +381,8 @@ def analyze_single_note_for_flag(note_text, note_dict, note_id, flag_key, criter
         resource_id=note_dict.get('note_id', note_id),
         values={
             "detected": True,
-            "highlighted_text": flag_result.formatted_text
+            "span": result.span,
+            "reasoning": result.reasoning
         },
         metadata={
             "patient_id": str(mrn),
@@ -368,7 +396,7 @@ def analyze_single_note_for_flag(note_text, note_dict, note_id, flag_key, criter
 
 def check_notes(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
     """
-    Check patient notes using IdentifyFlag tool for multiple criteria.
+    Check patient notes using AnalyzeNoteWithSpanAndReason tool for multiple criteria.
 
     Returns a list of output value entries for all detected flags.
     """

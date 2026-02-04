@@ -288,6 +288,7 @@ const ToolComponent = ({ tool }) => {
             data={result.result}
             schema={output_schema}
             toolName={name}
+            inputs={values}
           />
         </Box>
       )}

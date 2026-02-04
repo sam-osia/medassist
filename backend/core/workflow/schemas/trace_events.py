@@ -23,6 +23,9 @@ class AgentResultEvent(BaseModel):
     summary: str
     duration_ms: int
     timestamp: datetime
+    cost: Optional[float] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
 
 
 class FinalEvent(BaseModel):
