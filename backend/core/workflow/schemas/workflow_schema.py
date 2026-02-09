@@ -6,8 +6,9 @@ from core.workflow.schemas.tool_inputs import (
     GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput,
     AnalyzeNoteWithSpanAndReasonInput,
     ReadFlowsheetsTableInput, SummarizeFlowsheetsTableInput, GetMedicationsIdsInput,
-    ReadMedicationInput, GetDiagnosisIdsInput, ReadDiagnosisInput,
-    KeywordCountInput, AnalyzeFlowsheetInstanceInput,
+    ReadMedicationInput, FilterMedicationInput, HighlightMedicationInput,
+    GetDiagnosisIdsInput, ReadDiagnosisInput, HighlightDiagnosisInput,
+    SemanticKeywordCountInput, ExactKeywordCountInput, AnalyzeFlowsheetInstanceInput,
     InitStoreInput, StoreAppendInput, StoreReadInput, BuildTextInput
 )
 
@@ -15,8 +16,9 @@ ToolInput = Union[
     GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput,
     AnalyzeNoteWithSpanAndReasonInput, ReadFlowsheetsTableInput,
     SummarizeFlowsheetsTableInput, GetMedicationsIdsInput, ReadMedicationInput,
-    GetDiagnosisIdsInput, ReadDiagnosisInput, KeywordCountInput,
-    AnalyzeFlowsheetInstanceInput,
+    FilterMedicationInput, HighlightMedicationInput,
+    GetDiagnosisIdsInput, ReadDiagnosisInput, HighlightDiagnosisInput,
+    SemanticKeywordCountInput, ExactKeywordCountInput, AnalyzeFlowsheetInstanceInput,
     # Variable Management
     InitStoreInput, StoreAppendInput, StoreReadInput, BuildTextInput
 ]

@@ -7,63 +7,8 @@ from typing import Any, Dict, Tuple
 from pydantic import BaseModel, ValidationError
 
 from core.workflow.tools.base import Tool
-from core.workflow.tools.registry import discover, get_tool
+from core.workflow.tools.registry import discover, get_tool, _pydantic_input_model_map
 
-# Import Pydantic input models for validation
-from core.workflow.schemas.tool_inputs import (
-    GetPatientNotesIdsInput,
-    ReadPatientNoteInput,
-    SummarizePatientNoteInput,
-    KeywordCountInput,
-    AnalyzeNoteWithSpanAndReasonInput,
-    ReadFlowsheetsTableInput,
-    SummarizeFlowsheetsTableInput,
-    AnalyzeFlowsheetInstanceInput,
-    GetMedicationsIdsInput,
-    ReadMedicationInput,
-    GetDiagnosisIdsInput,
-    ReadDiagnosisInput,
-    FilterMedicationInput,
-    InitStoreInput,
-    StoreAppendInput,
-    StoreReadInput,
-    BuildTextInput,
-)
-
-
-def _pydantic_input_model_map() -> Dict[str, type[BaseModel]]:
-    return {
-        # Notes
-        "get_patient_notes_ids": GetPatientNotesIdsInput,
-        "read_patient_note": ReadPatientNoteInput,
-        "summarize_patient_note": SummarizePatientNoteInput,
-        "keyword_count": KeywordCountInput,
-        "analyze_note_with_span_and_reason": AnalyzeNoteWithSpanAndReasonInput,
-
-        # Flowsheets
-        "read_flowsheets_table": ReadFlowsheetsTableInput,
-        "summarize_flowsheets_table": SummarizeFlowsheetsTableInput,
-        "analyze_flowsheet_instance": AnalyzeFlowsheetInstanceInput,
-
-        # Medications
-        "get_medications_ids": GetMedicationsIdsInput,
-        "read_medication": ReadMedicationInput,
-        "filter_medication": FilterMedicationInput,
-
-        # Diagnosis
-        "get_diagnosis_ids": GetDiagnosisIdsInput,
-        "read_diagnosis": ReadDiagnosisInput,
-
-        # Variable Management
-        "init_store": InitStoreInput,
-        "store_append": StoreAppendInput,
-        "store_read": StoreReadInput,
-        "build_text": BuildTextInput,
-    }
-
-
-# Tools that can mutate state and require explicit opt-in
-_MUTATING_TOOLS = {"store_note_result"}
 
 
 def _normalize_result(value: Any) -> Tuple[Any, Dict[str, Any]]:
@@ -115,16 +60,6 @@ def run_tool(tool_name: str, inputs: Dict[str, Any], allow_side_effects: bool = 
         return {
             "ok": False,
             "error": {"code": "unknown_tool", "message": f"Unknown tool: {tool_name}"}
-        }
-
-    # Guard side effects
-    if tool_name in _MUTATING_TOOLS and not allow_side_effects:
-        return {
-            "ok": False,
-            "error": {
-                "code": "side_effects_not_allowed",
-                "message": f"Tool '{tool_name}' requires allow_side_effects=true"
-            }
         }
 
     # Validate inputs via Pydantic

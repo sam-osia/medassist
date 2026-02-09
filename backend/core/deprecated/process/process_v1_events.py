@@ -6,7 +6,7 @@ import datetime
 
 from core.workflow.tools.notes import (
     GetPatientNotesIds, ReadPatientNote,
-    SummarizePatientNote, HighlightPatientNote, KeywordCount, IdentifyFlag)
+    SummarizePatientNote, SemanticKeywordCount)
 from core.workflow.tools.medications import (
     GetMedicationsIds, ReadMedication)
 from core.workflow.tools.flowsheets import (
@@ -16,7 +16,7 @@ from core.workflow.tools.diagnosis import (
 from core.data.dataloader import get_patient_details
 from core.workflow.schemas.tool_inputs import (
     GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput,
-    HighlightPatientNoteInput, KeywordCountInput, IdentifyFlagInput,
+    SemanticKeywordCountInput,
     GetMedicationsIdsInput, ReadMedicationInput, GetDiagnosisIdsInput, ReadDiagnosisInput,
     ReadFlowsheetsTableInput, AnalyzeFlowsheetInstanceInput)
 from core.workflow.utils.event_handler import (

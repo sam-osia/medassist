@@ -45,9 +45,13 @@ function coerceValues(values, schema) {
       return;
     }
 
-    // Arrays (like keywords) - pass through
-    if (Array.isArray(value)) {
-      coerced[key] = value;
+    // Arrays (like keywords) - parse comma-separated strings at submission time
+    if (type === 'array') {
+      if (typeof value === 'string') {
+        coerced[key] = value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+      } else if (Array.isArray(value)) {
+        coerced[key] = value;
+      }
       return;
     }
 
@@ -112,8 +116,11 @@ function validateValues(values, schema) {
     }
 
     // Arrays need at least one item
-    if (type === 'array' || Array.isArray(v)) {
-      if (!v || v.length === 0) {
+    if (type === 'array') {
+      if (typeof v === 'string') {
+        const items = v.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        if (items.length === 0) errors[key] = 'Required';
+      } else if (!v || v.length === 0) {
         errors[key] = 'Required';
       }
       return;

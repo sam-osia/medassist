@@ -32,7 +32,11 @@ class AnalyzeNoteWithSpanAndReasonInput(BaseModel):
     prompt: Optional[PromptInput] = None
 
 # Keyword Count Tool Models
-class KeywordCountInput(BaseModel):
+class SemanticKeywordCountInput(BaseModel):
+    text: str
+    keywords: List[str]
+
+class ExactKeywordCountInput(BaseModel):
     text: str
     keywords: List[str]
 

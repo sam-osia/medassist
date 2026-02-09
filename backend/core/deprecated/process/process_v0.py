@@ -5,12 +5,12 @@ import json
 
 from core.workflow.tools.notes import (
     GetPatientNotesIds, ReadPatientNote,
-    SummarizePatientNote, HighlightPatientNote, KeywordCount)
+    SummarizePatientNote, SemanticKeywordCount)
 from core.workflow.tools.flowsheets import (
     ReadFlowsheetsTable, SummarizeFlowsheetsTable)
 from core.workflow.schemas.tool_inputs import (
     GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput,
-    HighlightPatientNoteInput, KeywordCountInput)
+    SemanticKeywordCountInput)
 
 from pydantic import BaseModel
 
@@ -42,7 +42,7 @@ def main():
             note_dict = json.loads(note_json_string)  # Parse JSON string back to dictionary
             note_text = note_dict['note_text']
             
-            keyword_count = KeywordCount()(KeywordCountInput(text=note_text, keywords=note_keywords))
+            keyword_count = SemanticKeywordCount()(SemanticKeywordCountInput(text=note_text, keywords=note_keywords))
             print('original note:')
             print(note_text)
             print()

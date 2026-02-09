@@ -31,4 +31,14 @@ MEDICATION_TABLE_SCHEMA = [
     'etl_datetime'
 ]
 
-# Add other schemas as needed (e.g., FLOWSHEET_SCHEMA, DIAGNOSIS_SCHEMA)
+NOTE_TABLE_SCHEMA = [
+    'note_id', 'pat_id', 'note_type_id', 'note_type', 'note_status',
+    'service', 'author', 'create_datetime', 'filing_datetime',
+    'note_text', 'etl_datetime'
+]
+
+DIAGNOSIS_TABLE_SCHEMA = [
+    'diagnosis_id', 'pat_id', 'dx_id', 'diagnosis_name', 'diagnosis_code',
+    'code_set', 'diagnosis_source', 'date', 'date_resolution',
+    'date_description', 'resolved_date', 'is_chronic', 'etl_datetime'
+]

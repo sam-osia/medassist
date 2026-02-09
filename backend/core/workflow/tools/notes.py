@@ -5,10 +5,11 @@ from core.llm_provider import call
 from core.workflow.tools.base import Tool
 from core.workflow.schemas.tool_inputs import (
     GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput,
-    KeywordCountInput, AnalyzeNoteWithSpanAndReasonInput
+    SemanticKeywordCountInput, ExactKeywordCountInput, AnalyzeNoteWithSpanAndReasonInput
 )
 from core.workflow.schemas.tool_outputs import (
-    KeywordCountOutput, AnalyzeNoteWithSpanAndReasonOutput)
+    SemanticKeywordCountOutput, ExactKeywordCountOutput, AnalyzeNoteWithSpanAndReasonOutput,
+    ReadPatientNoteOutput)
 import json
 from typing import List, Dict, Any
 from jinja2 import Template
@@ -42,9 +43,9 @@ class GetPatientNotesIds(Tool):
     @property
     def returns(self) -> dict:
         return {
-            "type": "list",
+            "type": "array",
             "items": {
-                "type": "int"
+                "type": "integer"
             }
         }
     
@@ -104,10 +105,23 @@ class ReadPatientNote(Tool):
     @property
     def returns(self) -> dict:
         return {
-            "type": "string",
-            "description": "JSON string containing the full patient note record."
+            "type": "object",
+            "properties": {
+                "note_id": {"type": "integer", "description": "Unique note identifier"},
+                "pat_id": {"type": "string", "description": "Patient identifier"},
+                "note_type_id": {"type": "integer", "description": "Note type identifier"},
+                "note_type": {"type": "string", "description": "Type of note (e.g., nursing, progress)"},
+                "note_status": {"type": "string", "description": "Status of the note"},
+                "service": {"type": "string", "description": "Service that created the note"},
+                "author": {"type": "string", "description": "Author of the note"},
+                "create_datetime": {"type": "string", "description": "When the note was created"},
+                "filing_datetime": {"type": "string", "description": "When the note was filed"},
+                "note_text": {"type": "string", "description": "Full text content of the note"},
+                "etl_datetime": {"type": "string", "description": "ETL processing timestamp"},
+            },
+            "required": ["note_id"]
         }
-    
+
     @property
     def parameters(self) -> Dict[str, Any]:
         return {
@@ -129,8 +143,8 @@ class ReadPatientNote(Tool):
             "required": ["mrn", "csn", "note_id"],
             "additionalProperties": False
         }
-    
-    def __call__(self, inputs: ReadPatientNoteInput) -> str:
+
+    def __call__(self, inputs: ReadPatientNoteInput) -> ReadPatientNoteOutput:
         # Find the patient in the dataset
         for patient in self.dataset:
             if patient['mrn'] == inputs.mrn:
@@ -140,8 +154,8 @@ class ReadPatientNote(Tool):
                         # Find the specific note
                         for note in encounter['notes']:
                             if int(note['note_id']) == int(inputs.note_id):
-                                return json.dumps(note)
-        return "{}"
+                                return ReadPatientNoteOutput(**note)
+        return ReadPatientNoteOutput()
 
 class SummarizePatientNote(Tool):
     def __init__(self, dataset: str = None):
@@ -189,7 +203,7 @@ class SummarizePatientNote(Tool):
                     "description": "The specific criteria or aspects to focus on in the summary"
                 }
             },
-            "required": ["note", "criteria"],
+            "required": ["note"],
             "additionalProperties": False
         }
     
@@ -227,7 +241,7 @@ class SummarizePatientNote(Tool):
 
 
 
-class AnalyzeNoteWithSpanAndReason:
+class AnalyzeNoteWithSpanAndReason(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
@@ -238,7 +252,7 @@ class AnalyzeNoteWithSpanAndReason:
 
     @property
     def description(self) -> str:
-        return "Analyze a patient note and highlight portions relevant to specific criteria using <highlight></highlight> tags."
+        return "Analyze a patient note, detect a criteria and extract portions of the text relevant to the criteria, with additional reasoning"
 
     @property
     def display_name(self) -> str:
@@ -246,7 +260,7 @@ class AnalyzeNoteWithSpanAndReason:
 
     @property
     def user_description(self) -> str:
-        return "Analyze a patient note and highlight portions relevant to specific criteria using <highlight></highlight> tags."
+        return "Analyze a patient note, detect a criteria and extract portions of the text relevant to the criteria, with additional reasoning"
 
     @property
     def input_help(self) -> Dict[str, str]:
@@ -276,7 +290,7 @@ class AnalyzeNoteWithSpanAndReason:
                     "description": "The reasoning that caused the model to set the flag_state to True. Empty if flag_state is false."
                 }
             },
-            "required": ["flag_state", "formatted_text"]
+            "required": ["flag_state", "span", "reasoning"]
         }
 
     @property
@@ -361,26 +375,26 @@ class AnalyzeNoteWithSpanAndReason:
             )
 
 
-class KeywordCount(Tool):
+class SemanticKeywordCount(Tool):
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "sickkids_icu"  # Default dataset
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property
     def name(self) -> str:
-        return "keyword_count"
+        return "semantic_keyword_count"
 
     @property
     def description(self) -> str:
-        return "Use LLM to analyze text and count keywords, returning structured output with counts and formatted text."
+        return "Use LLM to analyze text and count keywords semantically, returning structured output with counts and formatted text."
 
     @property
     def display_name(self) -> str:
-        return "Keyword Count"
+        return "Semantic Keyword Count"
 
     @property
     def user_description(self) -> str:
-        return "Use LLM to analyze text and count keywords, returning structured output with counts and formatted text."
+        return "Use LLM to analyze text and count keywords semantically (synonyms, negation handling), returning structured output with counts and formatted text."
 
     @property
     def category(self) -> str:
@@ -424,7 +438,7 @@ class KeywordCount(Tool):
             "additionalProperties": False
         }
     
-    def __call__(self, inputs: KeywordCountInput) -> KeywordCountOutput:
+    def __call__(self, inputs: SemanticKeywordCountInput) -> SemanticKeywordCountOutput:
         system_prompt = """
     You are a text analysis assistant. Your task is to detect semantic occurrences of specified keywords in a text.
 
@@ -479,14 +493,80 @@ class KeywordCount(Tool):
             result = call(
                 messages=[{"role": "user", "content": user_prompt}],
                 system=system_prompt,
-                schema=KeywordCountOutput
+                schema=SemanticKeywordCountOutput
             )
             return result.parsed
         except Exception as e:
             # Fallback if structured output fails
             print(f"Structured output failed: {e}")
-            return KeywordCountOutput(
+            return SemanticKeywordCountOutput(
                 count=0,
                 formatted_text=inputs.text
             )
+
+
+class ExactKeywordCount(Tool):
+    def __init__(self, dataset: str = None):
+        self.dataset_name = dataset or "sickkids_icu"
+        self.dataset = get_dataset_patients(self.dataset_name) or []
+
+    @property
+    def name(self) -> str:
+        return "exact_keyword_count"
+
+    @property
+    def description(self) -> str:
+        return "Count exact keyword matches in text (case-insensitive, deterministic)."
+
+    @property
+    def display_name(self) -> str:
+        return "Exact Keyword Count"
+
+    @property
+    def user_description(self) -> str:
+        return "Count exact keyword matches in text. Case-insensitive, no LLM involved."
+
+    @property
+    def category(self) -> str:
+        return "notes"
+
+    @property
+    def returns(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "counts": {
+                    "type": "object",
+                    "additionalProperties": {"type": "integer"},
+                    "description": "Dictionary mapping each keyword to its count"
+                }
+            },
+            "required": ["counts"]
+        }
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "The text to search for keywords"
+                },
+                "keywords": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of keywords to count"
+                }
+            },
+            "required": ["text", "keywords"],
+            "additionalProperties": False
+        }
+
+    def __call__(self, inputs: ExactKeywordCountInput) -> ExactKeywordCountOutput:
+        counts = {}
+        text_lower = inputs.text.lower()
+        for keyword in inputs.keywords:
+            counts[keyword] = text_lower.count(keyword.lower())
+        return ExactKeywordCountOutput(counts=counts)
 

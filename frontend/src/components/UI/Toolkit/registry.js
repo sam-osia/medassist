@@ -11,11 +11,11 @@
  */
 
 // Tool-specific components
-import KeywordCountInputForm from './tools/keyword_count/InputForm';
-import KeywordCountOutputView from './tools/keyword_count/OutputView';
-
 import AnalyzeNoteInputForm from './tools/analyze_note_with_span_and_reason/InputForm';
 import AnalyzeNoteOutputView from './tools/analyze_note_with_span_and_reason/OutputView';
+
+import ExactKeywordCountInputForm from './tools/exact_keyword_count/InputForm';
+import ExactKeywordCountOutputView from './tools/exact_keyword_count/OutputView';
 
 // Generic fallback components
 import GenericInputForm from './generic/GenericInputForm';
@@ -29,19 +29,14 @@ import GenericOutputView from './generic/GenericOutputView';
  * - OutputView: Custom output view component (null = use GenericOutputView)
  */
 const TOOL_REGISTRY = {
-  keyword_count: {
-    InputForm: KeywordCountInputForm,
-    OutputView: KeywordCountOutputView,
-  },
   analyze_note_with_span_and_reason: {
     InputForm: AnalyzeNoteInputForm,
     OutputView: AnalyzeNoteOutputView,
   },
-  // Add more tools here as needed
-  // example_tool: {
-  //   InputForm: null,  // Use generic
-  //   OutputView: ExampleToolOutputView,
-  // },
+  exact_keyword_count: {
+    InputForm: ExactKeywordCountInputForm,
+    OutputView: ExactKeywordCountOutputView,
+  },
 };
 
 /**

@@ -31,7 +31,8 @@ from core.workflow.tools.notes import (
     GetPatientNotesIds,
     ReadPatientNote,
     SummarizePatientNote,
-    KeywordCount,
+    SemanticKeywordCount,
+    ExactKeywordCount,
     AnalyzeNoteWithSpanAndReason
 )
 from core.workflow.tools.flowsheets import (
@@ -43,10 +44,12 @@ from core.workflow.tools.medications import (
     GetMedicationsIds,
     ReadMedication,
     FilterMedication,
+    HighlightMedication,
 )
 from core.workflow.tools.diagnosis import (
     GetDiagnosisIds,
     ReadDiagnosis,
+    HighlightDiagnosis,
 )
 from core.workflow.tools.variable_management import (
     InitStore,
@@ -60,7 +63,8 @@ from core.workflow.schemas.tool_inputs import (
     GetPatientNotesIdsInput,
     ReadPatientNoteInput,
     SummarizePatientNoteInput,
-    KeywordCountInput,
+    SemanticKeywordCountInput,
+    ExactKeywordCountInput,
     ReadFlowsheetsTableInput,
     SummarizeFlowsheetsTableInput,
     AnalyzeFlowsheetInstanceInput,
@@ -70,6 +74,8 @@ from core.workflow.schemas.tool_inputs import (
     ReadDiagnosisInput,
     AnalyzeNoteWithSpanAndReasonInput,
     FilterMedicationInput,
+    HighlightMedicationInput,
+    HighlightDiagnosisInput,
     InitStoreInput,
     StoreAppendInput,
     StoreReadInput,
@@ -78,9 +84,13 @@ from core.workflow.schemas.tool_inputs import (
 
 # Authoritative Pydantic output models for schema generation
 from core.workflow.schemas.tool_outputs import (
-    KeywordCountOutput,
+    SemanticKeywordCountOutput,
+    ExactKeywordCountOutput,
     AnalyzeNoteWithSpanAndReasonOutput,
-    FilterMedicationOutput
+    FilterMedicationOutput,
+    ReadPatientNoteOutput,
+    ReadMedicationOutput,
+    ReadDiagnosisOutput,
 )
 
 
@@ -102,7 +112,8 @@ def _pydantic_input_model_map() -> Dict[str, type[BaseModel]]:
         "get_patient_notes_ids": GetPatientNotesIdsInput,
         "read_patient_note": ReadPatientNoteInput,
         "summarize_patient_note": SummarizePatientNoteInput,
-        "keyword_count": KeywordCountInput,
+        "semantic_keyword_count": SemanticKeywordCountInput,
+        "exact_keyword_count": ExactKeywordCountInput,
         "analyze_note_with_span_and_reason": AnalyzeNoteWithSpanAndReasonInput,
 
         # Flowsheets
@@ -114,10 +125,12 @@ def _pydantic_input_model_map() -> Dict[str, type[BaseModel]]:
         "get_medications_ids": GetMedicationsIdsInput,
         "read_medication": ReadMedicationInput,
         "filter_medication": FilterMedicationInput,
+        "highlight_medication": HighlightMedicationInput,
 
         # Diagnosis
         "get_diagnosis_ids": GetDiagnosisIdsInput,
         "read_diagnosis": ReadDiagnosisInput,
+        "highlight_diagnosis": HighlightDiagnosisInput,
 
         # Variable Management
         "init_store": InitStoreInput,
@@ -133,9 +146,13 @@ def _pydantic_output_model_map() -> Dict[str, type[BaseModel]]:
     Only tools with structured outputs are mapped here.
     """
     return {
-        "keyword_count": KeywordCountOutput,
+        "semantic_keyword_count": SemanticKeywordCountOutput,
+        "exact_keyword_count": ExactKeywordCountOutput,
         "analyze_note_with_span_and_reason": AnalyzeNoteWithSpanAndReasonOutput,
         "filter_medication": FilterMedicationOutput,
+        "read_patient_note": ReadPatientNoteOutput,
+        "read_medication": ReadMedicationOutput,
+        "read_diagnosis": ReadDiagnosisOutput,
     }
 
 
@@ -149,7 +166,8 @@ def _instantiate_all_tools() -> List[Tool]:
         GetPatientNotesIds(),
         ReadPatientNote(),
         SummarizePatientNote(),
-        KeywordCount(),
+        SemanticKeywordCount(),
+        ExactKeywordCount(),
         AnalyzeNoteWithSpanAndReason(),
 
         # Flowsheets
@@ -161,10 +179,12 @@ def _instantiate_all_tools() -> List[Tool]:
         GetMedicationsIds(),
         ReadMedication(),
         FilterMedication(),
+        HighlightMedication(),
 
         # Diagnosis
         GetDiagnosisIds(),
         ReadDiagnosis(),
+        HighlightDiagnosis(),
 
         # Variable Management
         InitStore(),

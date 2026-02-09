@@ -4,9 +4,9 @@ import Grid from '@mui/material/Grid';
 import { TextAreaInput, TextInput } from '../../shared/inputs';
 
 /**
- * KeywordCount InputForm
+ * ExactKeywordCount InputForm
  *
- * Custom input form for the keyword_count tool.
+ * Custom input form for the exact_keyword_count tool.
  * Fields: text (textarea), keywords (comma-separated string -> array)
  */
 function InputForm({
@@ -23,19 +23,8 @@ function InputForm({
     });
   };
 
-  // Keywords are stored as comma-separated string in the form
-  // but need to be converted to array when submitted
-  const keywordsValue = Array.isArray(values.keywords)
-    ? values.keywords.join(', ')
-    : (values.keywords || '');
-
   const handleKeywordsChange = (value) => {
-    // Convert comma-separated string to array
-    const keywords = value
-      .split(',')
-      .map(k => k.trim())
-      .filter(k => k.length > 0);
-    handleFieldChange('keywords', keywords);
+    handleFieldChange('keywords', value);
   };
 
   return (
@@ -56,7 +45,7 @@ function InputForm({
         <Grid size={12}>
           <TextInput
             name="keywords"
-            value={keywordsValue}
+            value={values.keywords || ''}
             onChange={handleKeywordsChange}
             schema={{
               ...schema?.properties?.keywords,

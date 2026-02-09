@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from core.dataloders.datasets_loader import get_dataset_patients
 from core.llm_provider import call
 from core.workflow.tools.base import Tool
@@ -5,6 +7,7 @@ from core.workflow.schemas.tool_inputs import (
     GetMedicationsIdsInput, ReadMedicationInput, HighlightMedicationInput, FilterMedicationInput
 )
 from core.workflow.schemas.table_schemas import MEDICATION_TABLE_SCHEMA
+from core.workflow.schemas.tool_outputs import ReadMedicationOutput
 import json
 import pandas as pd
 import logging
@@ -42,9 +45,9 @@ class GetMedicationsIds(Tool):
     @property
     def returns(self) -> dict:
         return {
-            "type": "list",
+            "type": "array",
             "items": {
-                "type": "int"
+                "type": "integer"
             }
         }
     
@@ -104,10 +107,35 @@ class ReadMedication(Tool):
     @property
     def returns(self) -> dict:
         return {
-            "type": "string",
-            "description": "JSON string containing the full medication record."
+            "type": "object",
+            "properties": {
+                "order_id": {"type": "integer", "description": "Medication order identifier"},
+                "admin_line_num": {"type": "integer", "description": "Administration line number"},
+                "pat_id": {"type": "string", "description": "Patient identifier"},
+                "medication_id": {"type": "integer", "description": "Medication identifier"},
+                "order_display_name": {"type": "string", "description": "Display name for the order"},
+                "order_datetime": {"type": "string", "description": "When the order was placed"},
+                "order_start_datetime": {"type": "string", "description": "Order start time"},
+                "order_end_datetime": {"type": "string", "description": "Order end time"},
+                "admin_datetime": {"type": "string", "description": "Administration time"},
+                "admin_action": {"type": "string", "description": "Administration action (e.g., Given)"},
+                "drug_code": {"type": "string", "description": "Drug code"},
+                "medication_name": {"type": "string", "description": "Full medication name"},
+                "simple_generic_name": {"type": "string", "description": "Simple generic medication name"},
+                "dosage_order_amount": {"type": "number", "description": "Ordered dosage amount"},
+                "dosage_order_unit": {"type": "string", "description": "Ordered dosage unit"},
+                "dosage_given_amount": {"type": "number", "description": "Given dosage amount"},
+                "dosage_given_unit": {"type": "string", "description": "Given dosage unit"},
+                "dosing_bsa": {"type": "number", "description": "Body surface area for dosing"},
+                "dosing_height": {"type": "number", "description": "Height used for dosing"},
+                "dosing_weight": {"type": "number", "description": "Weight used for dosing"},
+                "dosing_frequency": {"type": "string", "description": "Dosing frequency"},
+                "medication_route": {"type": "string", "description": "Route of administration"},
+                "etl_datetime": {"type": "string", "description": "ETL processing timestamp"},
+            },
+            "required": ["order_id"]
         }
-    
+
     @property
     def parameters(self) -> Dict[str, Any]:
         return {
@@ -129,8 +157,8 @@ class ReadMedication(Tool):
             "required": ["mrn", "csn", "order_id"],
             "additionalProperties": False
         }
-    
-    def __call__(self, inputs: ReadMedicationInput) -> str:
+
+    def __call__(self, inputs: ReadMedicationInput) -> ReadMedicationOutput:
         # Find the patient in the dataset
         for patient in self.dataset:
             if patient['mrn'] == inputs.mrn:
@@ -140,8 +168,8 @@ class ReadMedication(Tool):
                         # Find the specific medication
                         for medication in encounter['medications']:
                             if medication.get('order_id') and int(medication['order_id']) == int(inputs.order_id):
-                                return json.dumps(medication)
-        return "{}"
+                                return ReadMedicationOutput(**medication)
+        return ReadMedicationOutput()
 
 
 class HighlightMedication(Tool):
@@ -321,12 +349,12 @@ class FilterMedication(Tool):
         ### Instructions:
         1. Output ONLY a boolean mask expression that can be used on a DataFrame named `df`.
         2. Use standard Pandas accessors like `.str.contains(..., case=False, na=False)`, `.isin([...])`, `.between(min, max)`, or `.isna()`.
-        3. For date columns (order_datetime, admin_datetime, etc.), NEVER use `.str`. Use direct datetime comparisons like `df['order_datetime'] >= '2026-01-10'` or `df['order_datetime'].dt.date == pd.to_datetime('2026-01-10').date()`.
+        3. For date columns (order_datetime, admin_datetime, etc.), NEVER use `.str`. Use direct datetime comparisons like `df['order_datetime'] >= '{datetime.now().strftime('%Y-%m-%d')}'` or `df['order_datetime'].dt.date == pd.to_datetime('{datetime.now().strftime('%Y-%m-%d')}').date()`.
         4. For column-to-column comparisons, use `df['col_a'] > df['col_b']`.
-        5. Current system date: 2026-01-10.
+        5. Current system date: {datetime.now().strftime('%Y-%m-%d')}.
 
         ### Examples:
-        - "Medications given today": "(df['order_datetime'] >= '2026-01-10') & (df['admin_action'] == 'Given')"
+        - "Medications given today": "(df['order_datetime'] >= '{datetime.now().strftime('%Y-%m-%d')}') & (df['admin_action'] == 'Given')"
         - "Dose less than ordered": "df['dosage_given_amount'] < df['dosage_order_amount']"
         - "Pain meds (Ibuprofen or Fentanyl)": "df['medication_name'].isin(['Ibuprofen', 'Fentanyl'])"
         - "Oral meds starting with 'A'": "(df['medication_route'] == 'Oral') & (df['medication_name'].str.startswith('A', na=False))"

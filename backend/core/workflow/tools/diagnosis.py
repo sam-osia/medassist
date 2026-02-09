@@ -5,6 +5,7 @@ from core.workflow.tools.base import Tool
 from core.workflow.schemas.tool_inputs import (
     GetDiagnosisIdsInput, ReadDiagnosisInput, HighlightDiagnosisInput
 )
+from core.workflow.schemas.tool_outputs import ReadDiagnosisOutput
 import json
 from typing import List, Dict, Any
 
@@ -100,10 +101,25 @@ class ReadDiagnosis(Tool):
     @property
     def returns(self) -> dict:
         return {
-            "type": "string",
-            "description": "JSON string containing the full diagnosis record with all available fields."
+            "type": "object",
+            "properties": {
+                "diagnosis_id": {"type": "integer", "description": "Unique diagnosis identifier"},
+                "pat_id": {"type": "string", "description": "Patient identifier"},
+                "dx_id": {"type": "integer", "description": "Diagnosis code identifier"},
+                "diagnosis_name": {"type": "string", "description": "Name of the diagnosis"},
+                "diagnosis_code": {"type": "string", "description": "Diagnosis code (e.g., ICD code)"},
+                "code_set": {"type": "string", "description": "Code set used (e.g., ICD-10)"},
+                "diagnosis_source": {"type": "string", "description": "Source of the diagnosis"},
+                "date": {"type": "string", "description": "Diagnosis date"},
+                "date_resolution": {"type": "string", "description": "Resolution of the date"},
+                "date_description": {"type": "string", "description": "Description of the date"},
+                "resolved_date": {"type": "string", "description": "Date the diagnosis was resolved"},
+                "is_chronic": {"type": "boolean", "description": "Whether the diagnosis is chronic"},
+                "etl_datetime": {"type": "string", "description": "ETL processing timestamp"},
+            },
+            "required": ["diagnosis_id"]
         }
-    
+
     @property
     def parameters(self) -> Dict[str, Any]:
         return {
@@ -125,8 +141,8 @@ class ReadDiagnosis(Tool):
             "required": ["mrn", "csn", "diagnosis_id"],
             "additionalProperties": False
         }
-    
-    def __call__(self, inputs: ReadDiagnosisInput) -> str:
+
+    def __call__(self, inputs: ReadDiagnosisInput) -> ReadDiagnosisOutput:
         # Find the patient in the dataset
         for patient in self.dataset:
             if patient['mrn'] == inputs.mrn:
@@ -136,8 +152,8 @@ class ReadDiagnosis(Tool):
                         # Find the specific diagnosis
                         for diagnosis in encounter.get('diagnoses', []):
                             if int(diagnosis['diagnosis_id']) == int(inputs.diagnosis_id):
-                                return json.dumps(diagnosis)
-        return "{}"
+                                return ReadDiagnosisOutput(**diagnosis)
+        return ReadDiagnosisOutput()
 
 
 class HighlightDiagnosis(Tool):

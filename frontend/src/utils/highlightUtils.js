@@ -57,19 +57,20 @@ export function renderHighlightedText(text, options = {}) {
     textColor = DEFAULT_HIGHLIGHT_TEXT,
   } = options;
 
-  // Split the text by highlight tags while preserving the tags
-  const parts = text.split(/(<highlight>.*?<\/highlight>)/g);
+  // Split the text by highlight tags (with optional color attr) while preserving the tags
+  const parts = text.split(/(<highlight(?:\s+color="[^"]*")?>.*?<\/highlight>)/g);
 
   return parts.map((part, index) => {
     // Check if this part is a highlighted section
-    if (part.startsWith('<highlight>') && part.endsWith('</highlight>')) {
-      // Extract the content between the tags
-      const content = part.slice(11, -12); // Remove <highlight> and </highlight>
+    const match = part.match(/^<highlight(?:\s+color="([^"]*)")?>(.*)$/s);
+    if (match && part.endsWith('</highlight>')) {
+      const tagColor = match[1]; // undefined if no color attr
+      const content = match[2].slice(0, -12); // Remove </highlight>
       return (
         <span
           key={index}
           style={{
-            backgroundColor,
+            backgroundColor: tagColor || backgroundColor,
             color: textColor,
             fontWeight: 'bold',
             padding: '2px 4px',
@@ -98,4 +99,55 @@ export function hasHighlights(text) {
     return false;
   }
   return text.includes('<highlight>') && text.includes('</highlight>');
+}
+
+/**
+ * Insert colored <highlight> tags for multiple keywords in text.
+ *
+ * @param {string} text - The source text
+ * @param {Object} keywordColorMap - Map of keyword → hex color (e.g. { "pain": "#e57373" })
+ * @returns {string} Text with <highlight color="...">...</highlight> tags inserted
+ */
+export function insertMultiKeywordHighlightTags(text, keywordColorMap) {
+  if (!text || !keywordColorMap || Object.keys(keywordColorMap).length === 0) {
+    return text || '';
+  }
+
+  // Find all occurrences of all keywords
+  const matches = [];
+  for (const [keyword, color] of Object.entries(keywordColorMap)) {
+    if (!keyword) continue;
+    const lowerText = text.toLowerCase();
+    const lowerKeyword = keyword.toLowerCase();
+    let pos = 0;
+    while ((pos = lowerText.indexOf(lowerKeyword, pos)) !== -1) {
+      matches.push({ start: pos, end: pos + keyword.length, color });
+      pos += keyword.length;
+    }
+  }
+
+  if (matches.length === 0) return text;
+
+  // Sort by start position, then longer matches first for ties
+  matches.sort((a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start));
+
+  // Remove overlaps (first match wins)
+  const filtered = [matches[0]];
+  for (let i = 1; i < matches.length; i++) {
+    if (matches[i].start >= filtered[filtered.length - 1].end) {
+      filtered.push(matches[i]);
+    }
+  }
+
+  // Build result string with highlight tags
+  let result = '';
+  let cursor = 0;
+  for (const m of filtered) {
+    result += text.slice(cursor, m.start);
+    result += `<highlight color="${m.color}">${text.slice(m.start, m.end)}</highlight>`;
+    cursor = m.end;
+  }
+  result += text.slice(cursor);
+
+  return result;
 }
