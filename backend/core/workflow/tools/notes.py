@@ -25,6 +25,10 @@ class GetPatientNotesIds(Tool):
         return "get_patient_notes_ids"
 
     @property
+    def role(self) -> str:
+        return "reader"
+
+    @property
     def description(self) -> str:
         return "Return a list of note IDs for a given patient MRN and CSN encounter."
 
@@ -85,6 +89,10 @@ class ReadPatientNote(Tool):
     @property
     def name(self) -> str:
         return "read_patient_note"
+
+    @property
+    def role(self) -> str:
+        return "reader"
 
     @property
     def description(self) -> str:

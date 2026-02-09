@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Any, Optional, Literal, Union, List
+from typing import Optional, Literal, Union, List
 
 
 # Prompt Input
@@ -99,7 +99,7 @@ class InitStoreInput(BaseModel):
 class StoreAppendInput(BaseModel):
     """Input for store_append tool - adds value to a store."""
     store: str  # Store name
-    value: Any  # Value to add
+    value: str  # Variable reference or literal value (resolved at runtime)
     key: Optional[str] = None  # Required for dict type
     separator: str = "\n"  # For text type only
 
@@ -112,7 +112,7 @@ class StoreReadInput(BaseModel):
 
 class BuildTextInput(BaseModel):
     """Input for build_text tool - formats data into text."""
-    source: Any  # Store name or direct list/dict value
+    source: str  # Store name or variable reference (resolved at runtime)
     mode: Literal["join"] = "join"  # Simple formatting mode
     template: Optional[str] = None  # Jinja2 template (overrides mode)
     separator: str = "\n"  # For join mode

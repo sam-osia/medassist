@@ -27,6 +27,10 @@ class GetMedicationsIds(Tool):
         return "get_medications_ids"
 
     @property
+    def role(self) -> str:
+        return "reader"
+
+    @property
     def description(self) -> str:
         return "Return a list of medication order IDs for a given patient MRN and CSN encounter."
 
@@ -87,6 +91,10 @@ class ReadMedication(Tool):
     @property
     def name(self) -> str:
         return "read_medication"
+
+    @property
+    def role(self) -> str:
+        return "reader"
 
     @property
     def description(self) -> str:

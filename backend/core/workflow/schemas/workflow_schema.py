@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any, Dict, List, Optional, Literal, Union, Annotated
 from pydantic import BaseModel, Field, ConfigDict
-from core.workflow.schemas.output_schemas import OutputDefinition, OutputMapping
+from core.workflow.schemas.output_schemas import OutputDefinition
 from core.workflow.schemas.tool_inputs import (
     GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput,
     AnalyzeNoteWithSpanAndReasonInput,
@@ -84,4 +84,3 @@ AllSteps = Union[ToolStep, IfStep, LoopStep]
 class Workflow(BaseModel):
     steps: List[AllSteps]
     output_definitions: List[OutputDefinition] = []
-    output_mappings: List[OutputMapping] = []

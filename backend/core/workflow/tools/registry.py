@@ -313,6 +313,7 @@ def discover(refresh: bool = False) -> None:
             "input_schema": _build_input_schema(tool),
             "output_schema": _build_output_schema(tool),
             "input_help": getattr(tool, "input_help", {}),
+            "role": getattr(tool, "role", "compute"),
         }
 
     _LAST_UPDATED = datetime.utcnow().isoformat()

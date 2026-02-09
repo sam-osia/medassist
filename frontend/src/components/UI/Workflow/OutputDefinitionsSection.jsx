@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Typography, Chip } from '@mui/material';
 import OutputDefinitionCard from './OutputDefinitionCard';
 
-const OutputDefinitionsSection = ({ definitions, mappings }) => {
+const OutputDefinitionsSection = ({ definitions }) => {
   return (
     <Box sx={{ mt: 2 }}>
       {/* Section Header */}
@@ -26,19 +26,13 @@ const OutputDefinitionsSection = ({ definitions, mappings }) => {
       </Box>
 
       {/* Cards Container */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-        {definitions.map(definition => {
-          // Find matching mapping for this definition
-          const mapping = mappings?.find(m => m.output_definition_id === definition.id) || null;
-
-          return (
-            <OutputDefinitionCard
-              key={definition.id}
-              definition={definition}
-              mapping={mapping}
-            />
-          );
-        })}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        {definitions.map(definition => (
+          <OutputDefinitionCard
+            key={definition.id}
+            definition={definition}
+          />
+        ))}
       </Box>
     </Box>
   );

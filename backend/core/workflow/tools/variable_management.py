@@ -26,6 +26,10 @@ class InitStore(Tool):
         return "init_store"
 
     @property
+    def role(self) -> str:
+        return "infrastructure"
+
+    @property
     def description(self) -> str:
         return "Create an empty store for accumulating data. Use 'list' for collecting items, 'text' for concatenating strings, or 'dict' for key-value pairs."
 
@@ -100,6 +104,10 @@ class StoreAppend(Tool):
     @property
     def name(self) -> str:
         return "store_append"
+
+    @property
+    def role(self) -> str:
+        return "infrastructure"
 
     @property
     def description(self) -> str:
@@ -180,6 +188,10 @@ class StoreRead(Tool):
         return "store_read"
 
     @property
+    def role(self) -> str:
+        return "infrastructure"
+
+    @property
     def description(self) -> str:
         return "Read the contents of a store. Returns the full store contents, or a specific key for dict stores."
 
@@ -239,6 +251,10 @@ class BuildText(Tool):
     @property
     def name(self) -> str:
         return "build_text"
+
+    @property
+    def role(self) -> str:
+        return "infrastructure"
 
     @property
     def description(self) -> str:

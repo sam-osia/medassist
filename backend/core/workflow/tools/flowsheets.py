@@ -20,6 +20,10 @@ class ReadFlowsheetsTable(Tool):
         return "read_flowsheets_table"
 
     @property
+    def role(self) -> str:
+        return "reader"
+
+    @property
     def description(self) -> str:
         return "Read the table of flowsheets for a given patient MRN and CSN encounter."
 

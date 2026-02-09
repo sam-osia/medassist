@@ -20,6 +20,10 @@ class GetDiagnosisIds(Tool):
         return "get_diagnosis_ids"
 
     @property
+    def role(self) -> str:
+        return "reader"
+
+    @property
     def description(self) -> str:
         return "Return a list of diagnosis IDs for a given patient MRN and CSN encounter."
 
@@ -81,6 +85,10 @@ class ReadDiagnosis(Tool):
     @property
     def name(self) -> str:
         return "read_diagnosis"
+
+    @property
+    def role(self) -> str:
+        return "reader"
 
     @property
     def description(self) -> str:

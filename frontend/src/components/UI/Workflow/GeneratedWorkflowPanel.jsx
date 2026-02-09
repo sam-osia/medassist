@@ -99,7 +99,6 @@ const GeneratedWorkflowPanel = ({
             {result?.raw_workflow?.output_definitions?.length > 0 && (
               <OutputDefinitionsSection
                 definitions={result.raw_workflow.output_definitions}
-                mappings={result.raw_workflow.output_mappings || []}
               />
             )}
           </Box>

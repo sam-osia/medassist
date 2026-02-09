@@ -121,17 +121,3 @@ class ClarifierOutput(BaseModel):
     output_tokens: Optional[int] = None
 
 
-class OutputDefinitionInput(BaseModel):
-    """Input for the output definition agent."""
-    workflow: Workflow  # Plan with steps (may have empty output_definitions)
-    user_intent: str    # Original user request for context
-
-
-class OutputDefinitionOutput(BaseModel):
-    """Output from the output definition agent."""
-    workflow: Optional[Workflow] = None  # Plan with output_definitions and output_mappings filled
-    success: bool
-    error_message: Optional[str] = None
-    cost: Optional[float] = None
-    input_tokens: Optional[int] = None
-    output_tokens: Optional[int] = None

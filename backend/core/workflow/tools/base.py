@@ -31,6 +31,11 @@ class Tool(ABC):
         pass
 
     @property
+    def role(self) -> str:
+        """Tool role: 'compute', 'reader', or 'infrastructure'. Override in subclasses."""
+        return "compute"
+
+    @property
     def input_help(self) -> Dict[str, str]:
         """Return help text for input fields. Override to provide field-specific guidance."""
         return {}

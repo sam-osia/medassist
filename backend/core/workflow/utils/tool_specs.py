@@ -78,9 +78,10 @@ def get_tool_specs_for_agents(dataset: str = None) -> Dict[str, Any]:
             "returns": tool.returns,
         }
 
-        # Add category if available
+        # Add category and role if available
         if hasattr(tool, 'category'):
             specs[tool.name]["category"] = tool.category
+        specs[tool.name]["role"] = getattr(tool, 'role', 'compute')
 
     return specs
 
