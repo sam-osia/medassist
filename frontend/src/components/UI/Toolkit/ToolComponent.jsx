@@ -9,6 +9,7 @@ import {
 } from '@mui/material';
 import { toolsService } from '../../../services/ApiService';
 import { getInputForm, getOutputView } from './registry';
+import { resolveFieldType } from './schemaUtils';
 
 /**
  * Coerce form values to proper types based on schema
@@ -20,10 +21,11 @@ function coerceValues(values, schema) {
   Object.keys(values).forEach((key) => {
     const field = schema.properties[key];
     const type = field?.type;
+    const resolved = resolveFieldType(field, schema);
     const value = values[key];
 
-    // Objects (like prompt) pass through as-is
-    if (type === 'object') {
+    // Objects (like prompt, model) pass through as-is
+    if (type === 'object' || resolved === 'PromptInput' || resolved === 'ModelInput') {
       coerced[key] = value;
       return;
     }
@@ -65,7 +67,7 @@ function coerceValues(values, schema) {
 /**
  * Initialize form values from schema
  */
-function initializeValues(schema) {
+function initializeValues(schema, promptDefaults = null) {
   if (!schema || !schema.properties) return {};
 
   const init = {};
@@ -73,13 +75,21 @@ function initializeValues(schema) {
     const field = schema.properties[key];
     const def = field?.default;
 
-    // Prompt fields get special initialization
-    if (field?.type === 'object' && key === 'prompt') {
-      init[key] = {
-        system_prompt: '',
-        user_prompt: '',
-        examples: []
-      };
+    // Prompt fields get special initialization — use defaults if provided
+    if (resolveFieldType(field, schema) === 'PromptInput') {
+      if (promptDefaults) {
+        init[key] = {
+          system_prompt: promptDefaults.system_prompt || '',
+          user_prompt: promptDefaults.user_prompt || '',
+          examples: promptDefaults.examples || []
+        };
+      } else {
+        init[key] = {
+          system_prompt: '',
+          user_prompt: '',
+          examples: []
+        };
+      }
     } else if (def !== undefined) {
       init[key] = def;
     } else {
@@ -108,7 +118,7 @@ function validateValues(values, schema) {
     }
 
     // Prompt objects need system_prompt and user_prompt
-    if (type === 'object' && key === 'prompt') {
+    if (resolveFieldType(field, schema) === 'PromptInput') {
       if (!v?.system_prompt?.trim() || !v?.user_prompt?.trim()) {
         errors[key] = 'Prompt configuration required';
       }
@@ -179,9 +189,9 @@ const ToolComponent = ({ tool }) => {
   useEffect(() => {
     setResult(null);
     setRunError(null);
-    setValues(initializeValues(schema));
+    setValues(initializeValues(schema, tool.prompt_defaults));
     setErrors({});
-  }, [name, schema]);
+  }, [name, schema]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleValuesChange = (newValues) => {
     setValues(newValues);
@@ -288,9 +298,21 @@ const ToolComponent = ({ tool }) => {
       {result?.ok && (
         <Box sx={{ mt: 3 }}>
           <Divider sx={{ mb: 2 }} />
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
-            Result
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+            <Typography variant="subtitle2" color="text.secondary">
+              Result
+            </Typography>
+            {result?.meta?.duration_ms != null && (
+              <Typography variant="caption" color="text.secondary">
+                {result.meta.duration_ms}ms
+              </Typography>
+            )}
+            {result?.meta?.cost > 0 && (
+              <Typography variant="caption" color="text.secondary">
+                ${result.meta.cost.toFixed(4)} · {result.meta.input_tokens} in / {result.meta.output_tokens} out
+              </Typography>
+            )}
+          </Box>
           <OutputView
             data={result.result}
             schema={output_schema}

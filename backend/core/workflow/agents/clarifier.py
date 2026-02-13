@@ -26,8 +26,9 @@ class ClarifierResponse(BaseModel):
 class ClarifierAgent(BaseAgent):
     """Analyzes requests and asks clarifying questions if needed."""
 
-    def __init__(self, dataset: str = None):
+    def __init__(self, dataset: str = None, key_name: str = None):
         self.dataset = dataset
+        self.key_name = key_name
         self._prompt = self._load_prompt()
 
     @property
@@ -83,8 +84,8 @@ Analyze whether the user's request is clear and achievable."""
             ]
 
             result = call(
-                model="gpt-4o",
                 messages=messages,
+                key_name=self.key_name,
                 system=system_prompt,
                 schema=ClarifierResponse,
                 temperature=0.5,

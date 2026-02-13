@@ -42,7 +42,7 @@ import {
 import { useTheme } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthProvider';
-import { usersService, datasetsService, projectsService } from '../services/ApiService';
+import { usersService, datasetsService, projectsService, apiKeysService } from '../services/ApiService';
 
 const AdminDashboardPage = () => {
   const theme = useTheme();
@@ -80,6 +80,17 @@ const AdminDashboardPage = () => {
   const [projectAccessMap, setProjectAccessMap] = useState(new Map());
   const [projectLoadingCells, setProjectLoadingCells] = useState(new Map());
 
+  // API Keys Tab State
+  const [apiKeys, setApiKeys] = useState([]);
+  const [apiKeysLoading, setApiKeysLoading] = useState(false);
+  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
+  const [editingKey, setEditingKey] = useState(null);
+  const [keyFormData, setKeyFormData] = useState({ key_name: '', model_name: '', api_key: '' });
+  const [availableModels, setAvailableModels] = useState([]);
+  const [keyAssignments, setKeyAssignments] = useState([]);
+  const [keyAssignmentMap, setKeyAssignmentMap] = useState(new Map());
+  const [keyLoadingCells, setKeyLoadingCells] = useState(new Map());
+
   // Snackbar State
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [error, setError] = useState(null);
@@ -96,6 +107,8 @@ const AdminDashboardPage = () => {
     fetchUsers();
     fetchAvailableDatasets();
     fetchAvailableProjects();
+    fetchApiKeys();
+    fetchAvailableModels();
   }, []);
 
   // Build dataset access map when users or datasets change
@@ -122,6 +135,40 @@ const AdminDashboardPage = () => {
     });
     setProjectAccessMap(map);
   }, [users, availableProjects]);
+
+  // Build key assignment map when assignments change
+  useEffect(() => {
+    const map = new Map();
+    keyAssignments.forEach(a => {
+      map.set(`${a.username}:${a.key_id}`, true);
+    });
+    setKeyAssignmentMap(map);
+  }, [keyAssignments]);
+
+  const fetchApiKeys = async () => {
+    setApiKeysLoading(true);
+    try {
+      const [keysRes, assignRes] = await Promise.all([
+        apiKeysService.listKeys(),
+        apiKeysService.listAssignments()
+      ]);
+      setApiKeys(keysRes.data.keys || []);
+      setKeyAssignments(assignRes.data.assignments || []);
+    } catch (err) {
+      console.error('Failed to load API keys:', err);
+    } finally {
+      setApiKeysLoading(false);
+    }
+  };
+
+  const fetchAvailableModels = async () => {
+    try {
+      const response = await apiKeysService.listModels();
+      setAvailableModels(response.data.models || []);
+    } catch (err) {
+      console.error('Failed to load models:', err);
+    }
+  };
 
   const fetchUsers = async () => {
     setUsersLoading(true);
@@ -375,6 +422,93 @@ const AdminDashboardPage = () => {
     }
   };
 
+  // API Key CRUD Functions
+  const handleOpenKeyDialog = (key = null) => {
+    setEditingKey(key);
+    setKeyFormData(key
+      ? { key_name: key.key_name, model_name: key.model_name, api_key: '' }
+      : { key_name: '', model_name: '', api_key: '' }
+    );
+    setKeyDialogOpen(true);
+  };
+
+  const handleCloseKeyDialog = () => {
+    setKeyDialogOpen(false);
+    setEditingKey(null);
+    setKeyFormData({ key_name: '', model_name: '', api_key: '' });
+  };
+
+  const handleSaveKey = async () => {
+    if (!keyFormData.key_name || !keyFormData.api_key || !keyFormData.model_name) {
+      if (!editingKey && (!keyFormData.key_name || !keyFormData.api_key || !keyFormData.model_name)) {
+        setSnackbar({ open: true, message: 'All fields are required', severity: 'error' });
+        return;
+      }
+    }
+
+    try {
+      if (editingKey) {
+        const updateData = {};
+        if (keyFormData.key_name && keyFormData.key_name !== editingKey.key_name) {
+          updateData.key_name = keyFormData.key_name;
+        }
+        if (keyFormData.api_key) {
+          updateData.api_key = keyFormData.api_key;
+        }
+        await apiKeysService.updateKey(editingKey.key_id, updateData);
+        setSnackbar({ open: true, message: `Key '${keyFormData.key_name}' updated`, severity: 'success' });
+      } else {
+        await apiKeysService.createKey({
+          key_name: keyFormData.key_name,
+          model_name: keyFormData.model_name,
+          api_key: keyFormData.api_key
+        });
+        setSnackbar({ open: true, message: `Key '${keyFormData.key_name}' created`, severity: 'success' });
+      }
+      handleCloseKeyDialog();
+      fetchApiKeys();
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.detail || 'Failed to save key', severity: 'error' });
+    }
+  };
+
+  const handleDeleteKey = async (key) => {
+    if (!window.confirm(`Delete key "${key.key_name}"? This will also remove all user assignments.`)) return;
+    try {
+      await apiKeysService.deleteKey(key.key_id);
+      setSnackbar({ open: true, message: `Key '${key.key_name}' deleted`, severity: 'success' });
+      fetchApiKeys();
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.detail || 'Failed to delete key', severity: 'error' });
+    }
+  };
+
+  const handleKeyAssignmentToggle = async (username, keyId) => {
+    const cellKey = `${username}:${keyId}`;
+    const hasAccess = keyAssignmentMap.get(cellKey) || false;
+
+    setKeyLoadingCells(prev => new Map(prev).set(cellKey, true));
+
+    try {
+      if (hasAccess) {
+        await apiKeysService.unassignKey(username, keyId);
+        setSnackbar({ open: true, message: `Unassigned key from '${username}'`, severity: 'success' });
+      } else {
+        await apiKeysService.assignKey(username, keyId);
+        setSnackbar({ open: true, message: `Assigned key to '${username}'`, severity: 'success' });
+      }
+
+      const newMap = new Map(keyAssignmentMap);
+      if (hasAccess) { newMap.delete(cellKey); } else { newMap.set(cellKey, true); }
+      setKeyAssignmentMap(newMap);
+      fetchApiKeys();
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.detail || 'Failed to update key assignment', severity: 'error' });
+    } finally {
+      setKeyLoadingCells(prev => { const m = new Map(prev); m.delete(cellKey); return m; });
+    }
+  };
+
   const handleSnackbarClose = () => {
     setSnackbar({ ...snackbar, open: false });
   };
@@ -401,6 +535,7 @@ const AdminDashboardPage = () => {
             <Tab label="Users" />
             <Tab label="Dataset Access" />
             <Tab label="Project Access" />
+            <Tab label="API Keys" />
           </Tabs>
         </Paper>
 
@@ -613,6 +748,155 @@ const AdminDashboardPage = () => {
             )}
           </Paper>
         )}
+
+        {currentTab === 3 && (
+          <Paper sx={{ p: 3 }}>
+            {/* API Keys Tab */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h6">API Key Registration</Typography>
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenKeyDialog()}>
+                Register Key
+              </Button>
+            </Box>
+
+            {apiKeysLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+            ) : apiKeys.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ p: 3, textAlign: 'center' }}>
+                No API keys registered yet.
+              </Typography>
+            ) : (
+              <TableContainer sx={{ mb: 4 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Key Name</TableCell>
+                      <TableCell>Model</TableCell>
+                      <TableCell>Provider</TableCell>
+                      <TableCell>API Key</TableCell>
+                      <TableCell>Created By</TableCell>
+                      <TableCell align="right">Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {apiKeys.map((key) => (
+                      <TableRow key={key.key_id}>
+                        <TableCell>{key.key_name}</TableCell>
+                        <TableCell>{key.model_name}</TableCell>
+                        <TableCell><Chip label={key.provider} size="small" /></TableCell>
+                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{key.api_key}</TableCell>
+                        <TableCell>{key.created_by}</TableCell>
+                        <TableCell align="right">
+                          <IconButton size="small" onClick={() => handleOpenKeyDialog(key)} color="primary"><EditIcon /></IconButton>
+                          <IconButton size="small" onClick={() => handleDeleteKey(key)} color="error"><DeleteIcon /></IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+
+            {/* Key Assignment Matrix */}
+            {apiKeys.length > 0 && users.length > 0 && (
+              <>
+                <Typography variant="h6" sx={{ mb: 2 }}>Key Assignments</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                  Toggle which API keys each user can access
+                </Typography>
+                <TableContainer sx={{ overflowX: 'auto' }}>
+                  <Table sx={{ minWidth: 650 }} size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'background.paper', zIndex: 1, fontWeight: 'bold' }}>
+                          Username
+                        </TableCell>
+                        {apiKeys.map(key => (
+                          <TableCell key={key.key_id} align="center">
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>{key.key_name}</Typography>
+                              <Typography variant="caption" color="text.secondary">{key.model_name}</Typography>
+                            </Box>
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {users.map(user => (
+                        <TableRow key={user.username} hover>
+                          <TableCell sx={{ position: 'sticky', left: 0, bgcolor: 'background.paper', fontWeight: 'medium' }}>
+                            {user.username}
+                            {user.is_admin && <Chip label="Admin" size="small" color="primary" sx={{ ml: 1 }} />}
+                          </TableCell>
+                          {apiKeys.map(key => (
+                            <TableCell key={key.key_id} align="center">
+                              {keyLoadingCells.get(`${user.username}:${key.key_id}`) ? (
+                                <CircularProgress size={20} />
+                              ) : (
+                                <Switch
+                                  checked={keyAssignmentMap.get(`${user.username}:${key.key_id}`) || false}
+                                  onChange={() => handleKeyAssignmentToggle(user.username, key.key_id)}
+                                  size="small"
+                                />
+                              )}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </>
+            )}
+          </Paper>
+        )}
+
+        {/* Register/Edit Key Dialog */}
+        <Dialog open={keyDialogOpen} onClose={handleCloseKeyDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>{editingKey ? 'Edit Key' : 'Register API Key'}</DialogTitle>
+          <DialogContent>
+            <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <TextField
+                label="Key Name"
+                value={keyFormData.key_name}
+                onChange={(e) => setKeyFormData(prev => ({ ...prev, key_name: e.target.value }))}
+                fullWidth
+                required
+                helperText="A unique, human-readable name for this key"
+              />
+              {!editingKey && (
+                <FormControl fullWidth required>
+                  <InputLabel>Model</InputLabel>
+                  <Select
+                    value={keyFormData.model_name}
+                    label="Model"
+                    onChange={(e) => setKeyFormData(prev => ({ ...prev, model_name: e.target.value }))}
+                  >
+                    {availableModels.map(m => (
+                      <MenuItem key={m.model_name} value={m.model_name}>
+                        {m.display_name} ({m.provider})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+              <TextField
+                label={editingKey ? 'New API Key (leave blank to keep current)' : 'API Key'}
+                type="password"
+                value={keyFormData.api_key}
+                onChange={(e) => setKeyFormData(prev => ({ ...prev, api_key: e.target.value }))}
+                fullWidth
+                required={!editingKey}
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseKeyDialog}>Cancel</Button>
+            <Button onClick={handleSaveKey} variant="contained">
+              {editingKey ? 'Update' : 'Register'}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Create/Edit User Dialog */}
         <Dialog open={userDialogOpen} onClose={handleCloseUserDialog} maxWidth="sm" fullWidth>

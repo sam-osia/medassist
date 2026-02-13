@@ -1,18 +1,56 @@
 import sys
 
-from core.dataloders.datasets_loader import get_dataset_patients
-from core.workflow.tools.base import Tool
-from core.workflow.schemas.tool_inputs import (
-    GetDiagnosisIdsInput, ReadDiagnosisInput, HighlightDiagnosisInput
-)
-from core.workflow.schemas.tool_outputs import ReadDiagnosisOutput
-import json
-from typing import List, Dict, Any
+from pydantic import BaseModel, Field
 
+from core.dataloaders.datasets_loader import get_dataset_patients
+from core.workflow.tools.base import Tool, ToolCallMeta
+import json
+from typing import List, Dict, Any, Optional, Union
+
+
+# ── Input Models ──────────────────────────────────────────────
+
+class GetDiagnosisIdsInput(BaseModel):
+    mrn: int = Field(description="Medical Record Number")
+    csn: int = Field(description="CSN encounter ID")
+
+
+class ReadDiagnosisInput(BaseModel):
+    mrn: int = Field(description="Medical Record Number")
+    csn: int = Field(description="CSN encounter ID")
+    diagnosis_id: Union[int, str] = Field(description="The specific diagnosis ID to retrieve")
+
+
+class HighlightDiagnosisInput(BaseModel):
+    diagnosis_name: str = Field(description="The diagnosis to search for.")
+    diagnoses_list: List[str] = Field(description="List of diagnosis names to search within.")
+
+
+# ── Output Models ─────────────────────────────────────────────
+
+class ReadDiagnosisOutput(BaseModel):
+    diagnosis_id: Optional[int] = None
+    pat_id: Optional[str] = None
+    dx_id: Optional[int] = None
+    diagnosis_name: Optional[str] = None
+    diagnosis_code: Optional[str] = None
+    code_set: Optional[str] = None
+    diagnosis_source: Optional[str] = None
+    date: Optional[str] = None
+    date_resolution: Optional[str] = None
+    date_description: Optional[str] = None
+    resolved_date: Optional[str] = None
+    is_chronic: Optional[bool] = None
+    etl_datetime: Optional[str] = None
+
+
+# ── Tool Classes ──────────────────────────────────────────────
 
 class GetDiagnosisIds(Tool):
+    Input = GetDiagnosisIdsInput
+
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property
@@ -38,48 +76,30 @@ class GetDiagnosisIds(Tool):
     @property
     def category(self) -> str:
         return "diagnosis"
-    
-    @property
-    def returns(self) -> dict:
+
+    def _returns_schema(self) -> dict:
         return {
             "type": "array",
-            "items": {
-                "type": "integer"
-            },
+            "items": {"type": "integer"},
             "description": "List of diagnosis IDs for the specified patient encounter"
         }
-    
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "mrn": {
-                    "type": "integer",
-                    "description": "Medical Record Number"
-                },
-                "csn": {
-                    "type": "integer",
-                    "description": "CSN encounter ID"
-                }
-            },
-            "required": ["mrn", "csn"],
-            "additionalProperties": False
-        }
-    
-    def __call__(self, inputs: GetDiagnosisIdsInput) -> List[int]:
+
+    def __call__(self, inputs: GetDiagnosisIdsInput):
         # Find the patient in the dataset
         for patient in self.dataset:
             if patient['mrn'] == inputs.mrn:
                 # Find the specific encounter
                 for encounter in patient['encounters']:
                     if int(encounter['csn']) == int(inputs.csn):
-                        return [diagnosis['diagnosis_id'] for diagnosis in encounter.get('diagnoses', [])]
-        return []
+                        return [diagnosis['diagnosis_id'] for diagnosis in encounter.get('diagnoses', [])], ToolCallMeta()
+        return [], ToolCallMeta()
 
 class ReadDiagnosis(Tool):
+    Input = ReadDiagnosisInput
+    Output = ReadDiagnosisOutput
+
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property
@@ -105,52 +125,8 @@ class ReadDiagnosis(Tool):
     @property
     def category(self) -> str:
         return "diagnosis"
-    
-    @property
-    def returns(self) -> dict:
-        return {
-            "type": "object",
-            "properties": {
-                "diagnosis_id": {"type": "integer", "description": "Unique diagnosis identifier"},
-                "pat_id": {"type": "string", "description": "Patient identifier"},
-                "dx_id": {"type": "integer", "description": "Diagnosis code identifier"},
-                "diagnosis_name": {"type": "string", "description": "Name of the diagnosis"},
-                "diagnosis_code": {"type": "string", "description": "Diagnosis code (e.g., ICD code)"},
-                "code_set": {"type": "string", "description": "Code set used (e.g., ICD-10)"},
-                "diagnosis_source": {"type": "string", "description": "Source of the diagnosis"},
-                "date": {"type": "string", "description": "Diagnosis date"},
-                "date_resolution": {"type": "string", "description": "Resolution of the date"},
-                "date_description": {"type": "string", "description": "Description of the date"},
-                "resolved_date": {"type": "string", "description": "Date the diagnosis was resolved"},
-                "is_chronic": {"type": "boolean", "description": "Whether the diagnosis is chronic"},
-                "etl_datetime": {"type": "string", "description": "ETL processing timestamp"},
-            },
-            "required": ["diagnosis_id"]
-        }
 
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "mrn": {
-                    "type": "integer",
-                    "description": "Medical Record Number"
-                },
-                "csn": {
-                    "type": "integer",
-                    "description": "CSN encounter ID"
-                },
-                "diagnosis_id": {
-                    "type": "integer",
-                    "description": "The specific diagnosis ID to retrieve"
-                }
-            },
-            "required": ["mrn", "csn", "diagnosis_id"],
-            "additionalProperties": False
-        }
-
-    def __call__(self, inputs: ReadDiagnosisInput) -> ReadDiagnosisOutput:
+    def __call__(self, inputs: ReadDiagnosisInput):
         # Find the patient in the dataset
         for patient in self.dataset:
             if patient['mrn'] == inputs.mrn:
@@ -160,13 +136,15 @@ class ReadDiagnosis(Tool):
                         # Find the specific diagnosis
                         for diagnosis in encounter.get('diagnoses', []):
                             if int(diagnosis['diagnosis_id']) == int(inputs.diagnosis_id):
-                                return ReadDiagnosisOutput(**diagnosis)
-        return ReadDiagnosisOutput()
+                                return ReadDiagnosisOutput(**diagnosis), ToolCallMeta()
+        return ReadDiagnosisOutput(), ToolCallMeta()
 
 
 class HighlightDiagnosis(Tool):
+    Input = HighlightDiagnosisInput
+
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property
@@ -189,35 +167,13 @@ class HighlightDiagnosis(Tool):
     def category(self) -> str:
         return "diagnosis"
 
-    @property
-    def returns(self) -> dict:
+    def _returns_schema(self) -> dict:
         return {
             "type": "string",
             "description": "The diagnosis string if found, otherwise an empty string."
         }
 
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "diagnosis_name": {
-                    "type": "string",
-                    "description": "The diagnosis to search for."
-                },
-                "diagnoses_list": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "description": "List of diagnosis names to search within."
-                }
-            },
-            "required": ["diagnosis_name", "diagnoses_list"],
-            "additionalProperties": False
-        }
-
-    def __call__(self, inputs: HighlightDiagnosisInput) -> str:
+    def __call__(self, inputs: HighlightDiagnosisInput):
         if inputs.diagnosis_name in inputs.diagnoses_list:
-            return inputs.diagnosis_name
-        return ""
+            return inputs.diagnosis_name, ToolCallMeta()
+        return "", ToolCallMeta()

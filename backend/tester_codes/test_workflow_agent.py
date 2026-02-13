@@ -114,7 +114,7 @@ def test_validator_catches_duplicate_id():
     validator = ValidatorAgent()
 
     # Create workflow with duplicate step IDs
-    from core.workflow.schemas.tool_inputs import (
+    from core.workflow.tools.notes import (
         GetPatientNotesIdsInput,
         ReadPatientNoteInput,
     )
@@ -149,7 +149,7 @@ def test_valid_workflow_passes_validation():
     """Test that a valid workflow passes validation."""
     validator = ValidatorAgent()
 
-    from core.workflow.schemas.tool_inputs import (
+    from core.workflow.tools.notes import (
         GetPatientNotesIdsInput,
         ReadPatientNoteInput,
     )
@@ -232,7 +232,7 @@ def test_summarizer_agent(run_llm: bool = False):
         print("⏭ Summarizer agent test skipped (set run_llm=True to run)")
         return
 
-    from core.workflow.schemas.tool_inputs import (
+    from core.workflow.tools.notes import (
         GetPatientNotesIdsInput,
     )
 
@@ -327,7 +327,7 @@ def test_output_mapping_schema():
 
 def test_plan_with_output_definitions():
     """Test Plan schema accepts output definitions."""
-    from core.workflow.schemas.tool_inputs import GetPatientNotesIdsInput
+    from core.workflow.tools.notes import GetPatientNotesIdsInput
 
     workflow = Workflow(
         steps=[
@@ -366,7 +366,7 @@ def test_validator_skips_output_validation():
     """Test validator currently skips output validation (always passes)."""
     validator = ValidatorAgent()
 
-    from core.workflow.schemas.tool_inputs import GetPatientNotesIdsInput
+    from core.workflow.tools.notes import GetPatientNotesIdsInput
 
     # Even with invalid output mappings, validator should pass
     workflow = Workflow(
@@ -409,7 +409,7 @@ def test_output_definition_agent(run_llm: bool = False):
         print("⏭ Output definition agent test skipped (set run_llm=True)")
         return
 
-    from core.workflow.schemas.tool_inputs import GetPatientNotesIdsInput, AnalyzeNoteWithSpanAndReasonInput
+    from core.workflow.tools.notes import GetPatientNotesIdsInput, AnalyzeNoteWithSpanAndReasonInput
 
     agent = OutputDefinitionAgent()
 

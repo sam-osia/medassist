@@ -1,6 +1,6 @@
 import sys
 import argparse
-from core.dataloders import user_loader
+from core.dataloaders import user_loader
 
 
 def list_user(username: str):

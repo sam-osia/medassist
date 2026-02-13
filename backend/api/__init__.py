@@ -7,3 +7,5 @@ from .users import router as users_router
 from .caboodle import router as caboodle_router
 from .annotations import router as annotations_router
 from .workflow_agent import router as workflow_agent_router
+from .custom_tools import router as custom_tools_router
+from .api_keys import router as api_keys_router

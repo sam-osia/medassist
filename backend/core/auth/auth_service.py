@@ -6,7 +6,7 @@ from typing import Optional, Dict
 from datetime import datetime, timedelta
 import logging
 import jwt
-from core.dataloders import user_loader
+from core.dataloaders import user_loader
 
 logger = logging.getLogger(__name__)
 

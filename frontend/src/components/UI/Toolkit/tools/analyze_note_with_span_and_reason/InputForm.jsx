@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box } from '@mui/material';
 import Grid from '@mui/material/Grid';
-import { TextAreaInput, PromptInput } from '../../shared/inputs';
+import { TextAreaInput, PromptInput, ModelInput } from '../../shared/inputs';
 
 /**
  * AnalyzeNoteWithSpanAndReason InputForm
@@ -54,6 +54,14 @@ function InputForm({
             availableVariables={availableVariables}
             outputSchema={outputSchema}
             helpText={inputHelp.prompt}
+          />
+        </Grid>
+        <Grid size={12}>
+          <ModelInput
+            name="model"
+            value={values.model || null}
+            onChange={(value) => handleFieldChange('model', value)}
+            disabled={disabled}
           />
         </Grid>
       </Grid>

@@ -84,7 +84,8 @@ class ExperimentCache:
                     "metadata": metadata,
                     "patient_count": 0,
                     "total_encounters": 0,
-                    "total_flags_detected": 0
+                    "total_flags_detected": 0,
+                    "total_cost": results.get("cost_summary", {}).get("totals", {}).get("total_cost", 0)
                 }
 
                 output_values = results.get("output_values", [])
@@ -181,7 +182,8 @@ class ExperimentCache:
                 "created_date": experiment_info["metadata"].get("created_date"),
                 "patient_count": experiment_info["patient_count"],
                 "total_encounters": experiment_info["total_encounters"],
-                "total_flags_detected": experiment_info["total_flags_detected"]
+                "total_flags_detected": experiment_info["total_flags_detected"],
+                "total_cost": experiment_info.get("total_cost", 0)
             })
 
         # Sort by creation date (newest first)
@@ -241,7 +243,8 @@ class ExperimentCache:
                     "dataset_name": metadata.get("dataset_name", "Unknown"),
                     "patient_count": experiment_info.get("patient_count", 0),
                     "total_encounters": experiment_info.get("total_encounters", 0),
-                    "total_flags_detected": experiment_info.get("total_flags_detected", 0)
+                    "total_flags_detected": experiment_info.get("total_flags_detected", 0),
+                    "total_cost": experiment_info.get("total_cost", 0)
                 })
 
         # Sort by run date (newest first)

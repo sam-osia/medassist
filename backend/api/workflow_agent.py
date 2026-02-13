@@ -12,11 +12,12 @@ from core.workflow.orchestrator import WorkflowOrchestrator
 from core.workflow.state import WorkflowAgentState
 from core.workflow.schemas.workflow_schema import Workflow
 from core.workflow.trace_recorder import TraceRecorder
-from core.dataloders.conversation_loader import (
+from core.dataloaders.conversation_loader import (
     save_conversation, get_conversation, list_conversations,
     delete_conversation, conversation_exists
 )
 from core.auth import permissions
+from core.dataloaders.api_key_loader import get_user_keys
 from .dependencies import get_current_user
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -128,9 +129,16 @@ async def process_message_stream(data: Dict[str, Any] = Body(...), current_user:
     mrn = data.get("mrn", 0)
     csn = data.get("csn", 0)
     dataset = data.get("dataset")
+    key_name = data.get("key_name")
 
     if not user_message:
         raise HTTPException(status_code=400, detail="Message is required")
+
+    # Validate user has access to the requested key
+    if key_name:
+        user_keys = get_user_keys(current_user)
+        if key_name not in [k["key_name"] for k in user_keys]:
+            raise HTTPException(status_code=403, detail=f"You don't have access to key '{key_name}'")
 
     # Load existing conversation or create new state
     if conversation_id and conversation_exists(conversation_id):
@@ -159,7 +167,7 @@ async def process_message_stream(data: Dict[str, Any] = Body(...), current_user:
 
     async def event_generator():
         trace = []  # Collect trace events for persistence (lightweight)
-        orchestrator = WorkflowOrchestrator(dataset=dataset)
+        orchestrator = WorkflowOrchestrator(dataset=dataset, key_name=key_name)
 
         try:
             for event in orchestrator.process_message_streaming(user_message, state, trace_recorder=trace_recorder):

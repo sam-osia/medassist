@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "execution_type": "llm_structured",
+  "tool_id": "fb02b337-9573-4cf4-b7a5-492fd156d7e2",
+  "tool_name": "test",
+  "display_name": "test",
+  "description": "Tool for extracting severity score",
+  "category": "custom",
+  "created_by": "sam.osia",
+  "created_at": "2026-02-11T03:09:51.714186",
+  "updated_at": "2026-02-11T03:12:01.428136",
+  "input_fields": [
+    {
+      "name": "note",
+      "label": "note",
+      "field_type": "string",
+      "description": "",
+      "required": true,
+      "is_enum": false,
+      "enum_values": null,
+      "default_value": null
+    }
+  ],
+  "output_fields": [
+    {
+      "name": "severity",
+      "label": "severity",
+      "field_type": "integer",
+      "description": "",
+      "required": true,
+      "is_enum": false,
+      "enum_values": null,
+      "default_value": null
+    },
+    {
+      "name": "reasoning",
+      "label": "reasoning",
+      "field_type": "string",
+      "description": "",
+      "required": true,
+      "is_enum": false,
+      "enum_values": null,
+      "default_value": null
+    }
+  ],
+  "prompt_defaults": {
+    "system_prompt": "You extract severity score from a note text and provide a reasoning for your score",
+    "user_prompt": "Identify this patient's emergency room severity score from 1-4, 4 being the worst \n\nNote:\n{{note}}",
+    "examples": null
+  }
+}

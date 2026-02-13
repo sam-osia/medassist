@@ -123,6 +123,15 @@ export const toolsService = {
         })
 };
 
+// Custom tool definition CRUD
+export const customToolsService = {
+    list: () => ApiService.get('/custom-tools/'),
+    get: (toolId) => ApiService.get(`/custom-tools/${toolId}`),
+    create: (data) => ApiService.post('/custom-tools/', data),
+    update: (toolId, data) => ApiService.patch(`/custom-tools/${toolId}`, data),
+    delete: (toolId) => ApiService.delete(`/custom-tools/${toolId}`),
+};
+
 // Project management functions
 export const projectsService = {
     // Get all projects
@@ -138,7 +147,10 @@ export const projectsService = {
     updateProject: (projectName, projectData) => ApiService.patch(`/projects/${projectName}`, projectData),
 
     // Delete project
-    deleteProject: (projectName) => ApiService.delete(`/projects/${projectName}`)
+    deleteProject: (projectName) => ApiService.delete(`/projects/${projectName}`),
+
+    // Get project billing/financials
+    getProjectBilling: (projectName) => ApiService.get(`/projects/${projectName}/billing`),
 };
 
 // Dataset management functions
@@ -267,10 +279,32 @@ export const annotationsService = {
         ApiService.delete(`/projects/${projectName}/annotations/groups/${groupId}/values/${itemId}`)
 };
 
+// API Key management functions
+export const apiKeysService = {
+    // Admin: list all keys (masked)
+    listKeys: () => ApiService.get('/api-keys/keys'),
+    // Admin: create key
+    createKey: (data) => ApiService.post('/api-keys/keys', data),
+    // Admin: update key
+    updateKey: (keyId, data) => ApiService.patch(`/api-keys/keys/${keyId}`, data),
+    // Admin: delete key
+    deleteKey: (keyId) => ApiService.delete(`/api-keys/keys/${keyId}`),
+    // Admin: list all assignments
+    listAssignments: () => ApiService.get('/api-keys/assignments'),
+    // Admin: assign key to user
+    assignKey: (username, keyId) => ApiService.post('/api-keys/assignments', { username, key_id: keyId }),
+    // Admin: unassign key from user
+    unassignKey: (username, keyId) => ApiService.delete(`/api-keys/assignments/${username}/${keyId}`),
+    // User: get my assigned keys
+    getMyKeys: () => ApiService.get('/api-keys/my-keys'),
+    // Admin: list available models from registry
+    listModels: () => ApiService.get('/api-keys/models'),
+};
+
 // New workflow agent service (multi-agent system)
 export const workflowAgentService = {
     // Process a message through the workflow agent with streaming trace events
-    processMessageStream: (message, conversationId = null, mrn = 0, csn = 0, dataset = null) => {
+    processMessageStream: (message, conversationId = null, mrn = 0, csn = 0, dataset = null, keyName = null) => {
         const token = localStorage.getItem('accessToken');
 
         return fetch(`${ApiService.defaults.baseURL}/workflow-agent/message`, {
@@ -284,7 +318,8 @@ export const workflowAgentService = {
                 conversation_id: conversationId,
                 mrn,
                 csn,
-                dataset
+                dataset,
+                ...(keyName && { key_name: keyName })
             })
         });
     }

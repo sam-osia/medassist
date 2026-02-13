@@ -46,16 +46,17 @@ class WorkflowOrchestrator:
     Processes user messages and returns structured responses.
     """
 
-    def __init__(self, dataset: str = None):
+    def __init__(self, dataset: str = None, key_name: str = None):
         self.dataset = dataset
+        self.key_name = key_name
         self.agents = {
-            "generator": GeneratorAgent(dataset),
-            "editor": EditorAgent(dataset),
-            "chunk_operator": ChunkOperatorAgent(dataset),
+            "generator": GeneratorAgent(dataset, key_name=key_name),
+            "editor": EditorAgent(dataset, key_name=key_name),
+            "chunk_operator": ChunkOperatorAgent(dataset, key_name=key_name),
             "validator": ValidatorAgent(),
-            "prompt_filler": PromptFillerAgent(dataset),
-            "summarizer": SummarizerAgent(),
-            # "clarifier": ClarifierAgent(),
+            "prompt_filler": PromptFillerAgent(dataset, key_name=key_name),
+            "summarizer": SummarizerAgent(key_name=key_name),
+            # "clarifier": ClarifierAgent(key_name=key_name),
         }
         self.tool_specs = get_tool_specs_for_agents(dataset)
         self._prompt = self._load_prompt()
@@ -343,8 +344,8 @@ Decide what to do next. If the workflow is ready and summarized, respond to user
         messages = [{"role": "user", "content": "What should we do next?"}]
 
         result = call(
-            model="gpt-4o",
             messages=messages,
+            key_name=self.key_name,
             system=system_prompt,
             schema=OrchestratorDecision,
             temperature=0.5,

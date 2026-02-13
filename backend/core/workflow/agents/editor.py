@@ -16,8 +16,9 @@ from ..schemas.agent_schemas import EditorInput, EditorOutput
 class EditorAgent(BaseAgent):
     """Edits existing workflows based on modification requests."""
 
-    def __init__(self, dataset: str = None):
+    def __init__(self, dataset: str = None, key_name: str = None):
         self.dataset = dataset
+        self.key_name = key_name
         self._prompt = self._load_prompt()
 
     @property
@@ -68,8 +69,8 @@ IMPORTANT: Preserve prompt values for unchanged steps!"""
             ]
 
             result = call(
-                model="gpt-4o",
                 messages=messages,
+                key_name=self.key_name,
                 system=system_prompt,
                 schema=Workflow,
                 temperature=0.7,

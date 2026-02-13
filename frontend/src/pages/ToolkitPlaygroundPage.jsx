@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -8,9 +8,10 @@ import {
   CardContent
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { toolsService } from '../services/ApiService';
+import { toolsService, customToolsService } from '../services/ApiService';
 import ToolComponent from '../components/UI/Toolkit/ToolComponent';
 import ToolSidebar from '../components/UI/Toolkit/ToolSidebar';
+import ToolBuilder from '../components/UI/Toolkit/ToolBuilder';
 
 const ToolkitPlaygroundPage = () => {
   const theme = useTheme();
@@ -19,33 +20,84 @@ const ToolkitPlaygroundPage = () => {
   const [tools, setTools] = useState([]);
   const [selectedToolName, setSelectedToolName] = useState(null);
 
-  useEffect(() => {
-    let mounted = true;
-    const fetchCatalog = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const resp = await toolsService.getCatalog();
-        if (!mounted) return;
-        const { tools: toolList = [] } = resp.data || {};
-        setTools(toolList);
-        if (toolList.length > 0) {
-          setSelectedToolName(toolList[0].name);
-        }
-      } catch (e) {
-        setError(e.response?.data?.detail || e.message || 'Failed to load tool catalog');
-      } finally {
-        if (mounted) setLoading(false);
+  // ToolBuilder state
+  const [toolBuilderOpen, setToolBuilderOpen] = useState(false);
+  const [editingTool, setEditingTool] = useState(null);
+
+  const fetchCatalog = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const resp = await toolsService.getCatalog();
+      const { tools: toolList = [] } = resp.data || {};
+      setTools(toolList);
+      if (toolList.length > 0 && !selectedToolName) {
+        setSelectedToolName(toolList[0].name);
       }
-    };
+    } catch (e) {
+      setError(e.response?.data?.detail || e.message || 'Failed to load tool catalog');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedToolName]);
+
+  useEffect(() => {
     fetchCatalog();
-    return () => { mounted = false; };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedTool = useMemo(() => {
     if (!selectedToolName) return null;
     return tools.find(t => t.name === selectedToolName) || null;
   }, [selectedToolName, tools]);
+
+  // Custom tool CRUD handlers
+  const handleCreateTool = () => {
+    setEditingTool(null);
+    setToolBuilderOpen(true);
+  };
+
+  const handleEditTool = async (tool) => {
+    // tool here is the catalog metadata — we need the full manifest for editing
+    // Find the tool_id from the catalog name by fetching the custom tools list
+    try {
+      const resp = await customToolsService.list();
+      const customTools = resp.data?.tools || [];
+      const full = customTools.find(t => t.tool_name === tool.name);
+      if (full) {
+        setEditingTool(full);
+        setToolBuilderOpen(true);
+      }
+    } catch (e) {
+      setError('Failed to load tool for editing');
+    }
+  };
+
+  const handleDeleteTool = async (tool) => {
+    if (!window.confirm(`Delete custom tool "${tool.display_name || tool.name}"?`)) return;
+    try {
+      const resp = await customToolsService.list();
+      const customTools = resp.data?.tools || [];
+      const full = customTools.find(t => t.tool_name === tool.name);
+      if (full) {
+        await customToolsService.delete(full.tool_id);
+        if (selectedToolName === tool.name) {
+          setSelectedToolName(null);
+        }
+        await fetchCatalog();
+      }
+    } catch (e) {
+      setError('Failed to delete tool');
+    }
+  };
+
+  const handleSaveCustomTool = async (data, existingTool) => {
+    if (existingTool) {
+      await customToolsService.update(existingTool.tool_id, data);
+    } else {
+      await customToolsService.create(data);
+    }
+    await fetchCatalog();
+  };
 
   return (
     <Box sx={{ display: 'flex', height: 'calc(100vh - 65px)' }}>
@@ -55,6 +107,9 @@ const ToolkitPlaygroundPage = () => {
         selectedToolName={selectedToolName}
         onSelectTool={setSelectedToolName}
         loading={loading}
+        onCreateTool={handleCreateTool}
+        onEditTool={handleEditTool}
+        onDeleteTool={handleDeleteTool}
       />
 
       {/* Main Content Area */}
@@ -83,7 +138,7 @@ const ToolkitPlaygroundPage = () => {
             ) : loading ? (
               <Box sx={{ p: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
                 <CircularProgress size={24} />
-                <Typography>Loading tools…</Typography>
+                <Typography>Loading tools...</Typography>
               </Box>
             ) : (
               <Typography variant="body1" color="text.secondary">
@@ -93,6 +148,14 @@ const ToolkitPlaygroundPage = () => {
           </CardContent>
         </Card>
       </Box>
+
+      {/* ToolBuilder Dialog */}
+      <ToolBuilder
+        open={toolBuilderOpen}
+        onClose={() => setToolBuilderOpen(false)}
+        onSave={handleSaveCustomTool}
+        existingTool={editingTool}
+      />
     </Box>
   );
 };

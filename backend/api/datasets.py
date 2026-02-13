@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, Any
 import logging
 
-from core.dataloders.datasets_loader import (
+from core.dataloaders.datasets_loader import (
     list_datasets,
     get_dataset,
     get_patient_dataset_summary,

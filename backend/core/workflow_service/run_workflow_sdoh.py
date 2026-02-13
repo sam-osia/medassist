@@ -5,11 +5,12 @@ from typing import List, Dict
 from core.workflow.tools.notes import (
     GetPatientNotesIds, ReadPatientNote, AnalyzeNoteWithSpanAndReason
 )
-from core.workflow.schemas.tool_inputs import (
-    GetPatientNotesIdsInput, ReadPatientNoteInput, AnalyzeNoteWithSpanAndReasonInput, PromptInput
+from core.workflow.tools.notes import (
+    GetPatientNotesIdsInput, ReadPatientNoteInput, AnalyzeNoteWithSpanAndReasonInput
 )
+from core.workflow.schemas.tool_inputs import PromptInput, ModelInput
 from core.workflow_service.utils import (
-    create_output_definition, create_output_value,
+    create_output_definition, create_output_value, call_tool,
     RESOURCE_TYPE_NOTE,
     FIELD_TYPE_BOOLEAN, FIELD_TYPE_TEXT
 )
@@ -80,7 +81,7 @@ def _build_output_definitions() -> Dict[str, dict]:
     return definitions
 
 
-def analyze_single_note_for_flag(note_text, note_dict, criteria_config, mrn, csn, flag_key, definitions: Dict[str, dict]):
+def analyze_single_note_for_flag(note_text, note_dict, criteria_config, mrn, csn, flag_key, definitions: Dict[str, dict], key_name: str, tracker=None):
     """
     Analyze a single note for a specific SDOH flag criteria.
 
@@ -90,11 +91,12 @@ def analyze_single_note_for_flag(note_text, note_dict, criteria_config, mrn, csn
     criteria_text = criteria_config['criteria']
     definition = definitions[flag_key]
 
-    flag_result = AnalyzeNoteWithSpanAndReason(dataset=DATASET)(
-        inputs=AnalyzeNoteWithSpanAndReasonInput(
+    flag_result = call_tool(AnalyzeNoteWithSpanAndReason(dataset=DATASET),
+        AnalyzeNoteWithSpanAndReasonInput(
             note=note_text,
             prompt=criteria_config['prompt'],
-        ))
+            model=ModelInput(key_name=key_name),
+        ), tracker)
 
     if not flag_result.flag_state:
         return None
@@ -118,7 +120,7 @@ def analyze_single_note_for_flag(note_text, note_dict, criteria_config, mrn, csn
     )
 
 
-def analyze_notes(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
+def analyze_notes(mrn, csn, definitions: Dict[str, dict], key_name: str, tracker=None) -> List[dict]:
     """
     Analyze patient notes for SDOH flags.
 
@@ -127,7 +129,7 @@ def analyze_notes(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
     output_values = []
 
     try:
-        note_ids = GetPatientNotesIds(dataset=DATASET)(inputs=GetPatientNotesIdsInput(mrn=mrn, csn=csn))
+        note_ids = call_tool(GetPatientNotesIds(dataset=DATASET), GetPatientNotesIdsInput(mrn=mrn, csn=csn), tracker)
 
         if not note_ids:
             print("No notes found for this patient encounter.")
@@ -135,9 +137,9 @@ def analyze_notes(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
 
         for i, note_id in enumerate(note_ids):
             try:
-                note_json_string = ReadPatientNote(dataset=DATASET)(
-                    inputs=ReadPatientNoteInput(mrn=mrn, csn=csn, note_id=note_id))
-                note_dict = json.loads(note_json_string)
+                note_result = call_tool(ReadPatientNote(dataset=DATASET),
+                    ReadPatientNoteInput(mrn=mrn, csn=csn, note_id=note_id), tracker)
+                note_dict = note_result.model_dump()
                 note_text = note_dict.get('note_text', '')
 
                 if not note_text or note_text.strip() == '':
@@ -145,7 +147,7 @@ def analyze_notes(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
 
                 for flag_key, criteria_config in NOTE_FLAG_CRITERIA.items():
                     result = analyze_single_note_for_flag(
-                        note_text, note_dict, criteria_config, mrn, csn, flag_key, definitions
+                        note_text, note_dict, criteria_config, mrn, csn, flag_key, definitions, key_name, tracker
                     )
                     if result:
                         output_values.append(result)
@@ -159,7 +161,7 @@ def analyze_notes(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
     return output_values
 
 
-def run_workflow(mrn, csn, prompts):
+def run_workflow(mrn, csn, prompts, key_name: str, tracker=None):
     """
     Run SDOH screening workflow on a patient encounter.
 
@@ -169,6 +171,7 @@ def run_workflow(mrn, csn, prompts):
         mrn: Patient MRN
         csn: Patient CSN
         prompts: List of 9 PromptInput objects for each SDOH flag
+        key_name: Managed API key name for LLM calls
 
     Returns:
         dict: {
@@ -192,7 +195,7 @@ def run_workflow(mrn, csn, prompts):
     # Analyze notes for SDOH flags
     try:
         print('Analyzing notes for SDOH indicators...')
-        note_values = analyze_notes(mrn, csn, definitions)
+        note_values = analyze_notes(mrn, csn, definitions, key_name, tracker)
         output_values.extend(note_values)
     except Exception as e:
         logger.error(f"Error in SDOH note analysis for MRN {mrn}, CSN {csn}: {e}")

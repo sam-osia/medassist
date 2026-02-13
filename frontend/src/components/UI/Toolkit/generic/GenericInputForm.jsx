@@ -7,8 +7,10 @@ import {
   NumberInput,
   BooleanInput,
   EnumInput,
-  PromptInput
+  PromptInput,
+  ModelInput
 } from '../shared/inputs';
+import { resolveFieldType } from '../schemaUtils';
 
 /**
  * Determine field order: required fields first, then mrn/csn, then others
@@ -36,8 +38,9 @@ function getFieldOrder(schema) {
 /**
  * Determine which input component to use based on field schema
  */
-function getInputComponent(fieldName, fieldSchema) {
+function getInputComponent(fieldName, fieldSchema, rootSchema) {
   const type = fieldSchema?.type;
+  const resolved = resolveFieldType(fieldSchema, rootSchema);
 
   // Enum takes precedence
   if (Array.isArray(fieldSchema?.enum)) {
@@ -54,9 +57,14 @@ function getInputComponent(fieldName, fieldSchema) {
     return NumberInput;
   }
 
-  // Object with name 'prompt' -> PromptInput
-  if (type === 'object' && fieldName === 'prompt') {
+  // PromptInput (direct type or anyOf/$ref)
+  if (resolved === 'PromptInput') {
     return PromptInput;
+  }
+
+  // ModelInput (direct type or anyOf/$ref)
+  if (resolved === 'ModelInput') {
+    return ModelInput;
   }
 
   // String - check for textarea patterns
@@ -119,13 +127,15 @@ function GenericInputForm({
       <Grid container spacing={2}>
         {fieldOrder.map((fieldName) => {
           const fieldSchema = schema.properties[fieldName];
-          const InputComponent = getInputComponent(fieldName, fieldSchema);
+          const InputComponent = getInputComponent(fieldName, fieldSchema, schema);
           const value = values[fieldName];
           const error = errors[fieldName];
 
-          // Skip unsupported complex types (except prompt objects)
+          // Skip unsupported complex types (except known resolved types like PromptInput, ModelInput)
           const type = fieldSchema?.type;
-          if ((type === 'object' && fieldName !== 'prompt') || type === 'array') {
+          const resolved = resolveFieldType(fieldSchema, schema);
+          const isKnownRefType = resolved === 'PromptInput' || resolved === 'ModelInput';
+          if (!isKnownRefType && (type === 'object' || type === 'array')) {
             return (
               <Grid size={12} key={fieldName}>
                 <Alert severity="info">

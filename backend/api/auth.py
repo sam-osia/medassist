@@ -4,7 +4,7 @@ from typing import Dict, Any
 import logging
 
 from core.auth import auth_service
-from core.dataloders import user_loader
+from core.dataloaders import user_loader
 from .dependencies import get_current_user
 
 logger = logging.getLogger(__name__)

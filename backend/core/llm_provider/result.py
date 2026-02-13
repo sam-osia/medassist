@@ -41,6 +41,8 @@ class LLMResult:
     parsed: Optional[Any] = None                              # For structured outputs
     tool_calls: Optional[List[ToolCall]] = None               # For tool calling
     raw_response: Optional[Any] = None                        # Original provider response
+    api_key_name: Optional[str] = None                        # Managed key name (if used)
+    api_key_id: Optional[str] = None                          # Managed key ID (if used)
 
     @property
     def total_tokens(self) -> int:

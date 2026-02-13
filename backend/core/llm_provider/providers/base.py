@@ -64,6 +64,7 @@ class BaseProvider(ABC):
         tools: Optional[List[ToolDefinition]] = None,
         tool_choice: Union[str, Dict[str, Any]] = "auto",
         stream: bool = False,
+        api_key: Optional[str] = None,
     ) -> Union[ProviderResponse, Generator[ProviderStreamChunk, None, None]]:
         """Unified call method with optional structured output, tools, and streaming.
 

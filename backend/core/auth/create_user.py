@@ -1,7 +1,7 @@
 import sys
 import argparse
 from core.auth import auth_service
-from core.dataloders import user_loader
+from core.dataloaders import user_loader
 
 
 def main():

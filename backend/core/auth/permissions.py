@@ -22,7 +22,7 @@ def is_admin(username: str) -> bool:
     Returns:
         True if user is admin, False otherwise
     """
-    from core.dataloders import user_loader
+    from core.dataloaders import user_loader
 
     user = user_loader.get_user(username)
     if not user:
@@ -41,7 +41,7 @@ def has_dataset_access(username: str, dataset_name: str) -> bool:
     Returns:
         True if user has access (admin or dataset in allowed_datasets)
     """
-    from core.dataloders import user_loader
+    from core.dataloaders import user_loader
 
     # Admins have access to everything
     if is_admin(username):
@@ -67,7 +67,7 @@ def has_project_access(username: str, project_name: str) -> bool:
     Returns:
         True if user has access (admin, owner, or in allowed_users)
     """
-    from core.dataloders import projects_loader
+    from core.dataloaders import projects_loader
 
     # Admins have access to everything
     if is_admin(username):
@@ -97,7 +97,7 @@ def has_plan_access(username: str, plan_name: str) -> bool:
     Returns:
         True if user has access (admin or creator)
     """
-    from core.dataloders import plan_loader
+    from core.dataloaders import plan_loader
 
     # Admins have access to everything
     if is_admin(username):
@@ -122,7 +122,7 @@ def has_workflow_def_access(username: str, workflow_name: str) -> bool:
     Returns:
         True if user has access (admin or creator)
     """
-    from core.dataloders import workflow_def_loader
+    from core.dataloaders import workflow_def_loader
 
     # Admins have access to everything
     if is_admin(username):
@@ -149,7 +149,7 @@ def has_experiment_access(username: str, experiment_name: str) -> bool:
     Returns:
         True if user has access (admin or has access to parent project)
     """
-    from core.dataloders import experiment_loader
+    from core.dataloaders import experiment_loader
 
     # Admins have access to everything
     if is_admin(username):
@@ -180,7 +180,7 @@ def is_project_owner(username: str, project_name: str) -> bool:
     Returns:
         True if user is the project owner
     """
-    from core.dataloders import projects_loader
+    from core.dataloaders import projects_loader
 
     project = projects_loader.get_project(project_name)
     if not project:

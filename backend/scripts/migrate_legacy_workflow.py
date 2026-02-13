@@ -8,7 +8,7 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from core.dataloders.workflow_def_loader import save_workflow_def
+from core.dataloaders.workflow_def_loader import save_workflow_def
 
 
 def find_last_plan(conversation_history: list) -> dict | None:

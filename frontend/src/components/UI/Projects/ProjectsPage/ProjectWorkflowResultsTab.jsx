@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -34,6 +34,79 @@ import {
 import { workflowBuilderService, workflowService, datasetsService } from '../../../../services/ApiService';
 import PatientSelectionTable from '../PatientSelectionTable';
 import ExperimentResultsPatientTable from './ExperimentResultsPatientTable';
+
+const formatNumber = (n) => n?.toLocaleString() ?? '0';
+const formatCost = (n) => `$${(n || 0).toFixed(4)}`;
+const formatDuration = (ms) => `${((ms || 0) / 1000).toFixed(1)}s`;
+
+const CostSummaryTable = ({ costSummary }) => {
+  const [expanded, setExpanded] = useState(false);
+  const toolCosts = costSummary?.tool_costs || {};
+  const totals = costSummary?.totals || {};
+
+  const sortedTools = useMemo(() =>
+    Object.entries(toolCosts).sort(([, a], [, b]) => b.cost - a.cost),
+    [toolCosts]
+  );
+
+  if (sortedTools.length === 0) return null;
+
+  return (
+    <Paper variant="outlined" sx={{ mb: 3 }}>
+      <Box
+        sx={{ display: 'flex', alignItems: 'center', p: 1.5, cursor: 'pointer' }}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <IconButton size="small" sx={{ mr: 1 }}>
+          {expanded ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+        </IconButton>
+        <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
+          Cost Summary
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mr: 2 }}>
+          {formatNumber(totals.total_calls)} calls &middot; {formatCost(totals.total_cost)} &middot; {formatDuration(totals.total_duration_ms)}
+        </Typography>
+      </Box>
+      <Collapse in={expanded}>
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Tool</TableCell>
+                <TableCell align="right">Calls</TableCell>
+                <TableCell align="right">Input Tokens</TableCell>
+                <TableCell align="right">Output Tokens</TableCell>
+                <TableCell align="right">Cost</TableCell>
+                <TableCell align="right">Duration</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {sortedTools.map(([toolName, data]) => (
+                <TableRow key={toolName}>
+                  <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{toolName}</TableCell>
+                  <TableCell align="right">{formatNumber(data.calls)}</TableCell>
+                  <TableCell align="right">{formatNumber(data.input_tokens)}</TableCell>
+                  <TableCell align="right">{formatNumber(data.output_tokens)}</TableCell>
+                  <TableCell align="right">{formatCost(data.cost)}</TableCell>
+                  <TableCell align="right">{formatDuration(data.duration_ms)}</TableCell>
+                </TableRow>
+              ))}
+              {/* Totals row */}
+              <TableRow sx={{ '& td': { fontWeight: 600, borderTop: 2, borderColor: 'divider' } }}>
+                <TableCell>Total</TableCell>
+                <TableCell align="right">{formatNumber(totals.total_calls)}</TableCell>
+                <TableCell align="right">{formatNumber(totals.total_input_tokens)}</TableCell>
+                <TableCell align="right">{formatNumber(totals.total_output_tokens)}</TableCell>
+                <TableCell align="right">{formatCost(totals.total_cost)}</TableCell>
+                <TableCell align="right">{formatDuration(totals.total_duration_ms)}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Collapse>
+    </Paper>
+  );
+};
 
 const ProjectWorkflowResultsTab = ({ project }) => {
   const [workflowRuns, setWorkflowRuns] = useState([]);
@@ -404,7 +477,7 @@ const ProjectWorkflowResultsTab = ({ project }) => {
                     >
                       {completedExperiments.map((run) => (
                         <MenuItem key={run.experiment_name} value={run.experiment_name}>
-                          {run.experiment_name} - {formatDate(run.run_date)} ({run.patient_count} patients)
+                          {run.experiment_name} - {formatDate(run.run_date)} ({run.patient_count} patients{run.total_cost > 0 ? ` · ${formatCost(run.total_cost)}` : ''})
                         </MenuItem>
                       ))}
                     </Select>
@@ -447,8 +520,18 @@ const ProjectWorkflowResultsTab = ({ project }) => {
                       <Typography variant="body2" color="text.secondary">
                         Encounters: {selectedExperimentDetails.metadata.total_encounters}
                       </Typography>
+                      {selectedExperimentDetails.results?.cost_summary?.totals?.total_cost > 0 && (
+                        <Typography variant="body2" color="text.secondary">
+                          Total Cost: ${selectedExperimentDetails.results.cost_summary.totals.total_cost.toFixed(4)}
+                        </Typography>
+                      )}
                     </Box>
                   </Paper>
+
+                  {/* Cost Summary */}
+                  {selectedExperimentDetails.results?.cost_summary && (
+                    <CostSummaryTable costSummary={selectedExperimentDetails.results.cost_summary} />
+                  )}
 
                   {/* Patient table */}
                   <ExperimentResultsPatientTable

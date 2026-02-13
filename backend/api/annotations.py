@@ -2,8 +2,8 @@ from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import Dict, Any, List
 import logging
 
-from core.dataloders import annotations_loader
-from core.dataloders.projects_loader import project_exists
+from core.dataloaders import annotations_loader
+from core.dataloaders.projects_loader import project_exists
 from core.auth import permissions
 from .dependencies import get_current_user
 

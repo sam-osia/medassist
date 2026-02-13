@@ -3,7 +3,7 @@ import logging
 import os
 from typing import List, Dict, Any, Optional
 from threading import Lock
-from core.dataloders import user_loader
+from core.dataloaders import user_loader
 
 logger = logging.getLogger(__name__)
 

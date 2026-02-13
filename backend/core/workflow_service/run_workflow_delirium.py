@@ -15,13 +15,15 @@ from core.workflow.tools.diagnosis import (
     GetDiagnosisIds, ReadDiagnosis
 )
 from core.data.dataloader import get_patient_details
-from core.workflow.schemas.tool_inputs import (
-    GetPatientNotesIdsInput, ReadPatientNoteInput, AnalyzeNoteWithSpanAndReasonInput,
-    GetMedicationsIdsInput, ReadMedicationInput, GetDiagnosisIdsInput, ReadDiagnosisInput,
-    AnalyzeFlowsheetInstanceInput, PromptInput
+from core.workflow.tools.notes import (
+    GetPatientNotesIdsInput, ReadPatientNoteInput, AnalyzeNoteWithSpanAndReasonInput
 )
+from core.workflow.tools.medications import GetMedicationsIdsInput, ReadMedicationInput
+from core.workflow.tools.diagnosis import GetDiagnosisIdsInput, ReadDiagnosisInput
+from core.workflow.tools.flowsheets import AnalyzeFlowsheetInstanceInput
+from core.workflow.schemas.tool_inputs import PromptInput, ModelInput
 from core.workflow_service.utils import (
-    create_output_definition, create_output_value,
+    create_output_definition, create_output_value, call_tool,
     RESOURCE_TYPE_NOTE, RESOURCE_TYPE_MEDICATION, RESOURCE_TYPE_DIAGNOSIS, RESOURCE_TYPE_FLOWSHEET,
     FIELD_TYPE_BOOLEAN, FIELD_TYPE_TEXT
 )
@@ -128,7 +130,7 @@ def _build_output_definitions() -> Dict[str, dict]:
 OUTPUT_DEFINITIONS = _build_output_definitions()
 
 
-def check_medications(mrn, csn, medications_to_check: List[str], definitions: Dict[str, dict]) -> List[dict]:
+def check_medications(mrn, csn, medications_to_check: List[str], definitions: Dict[str, dict], tracker=None) -> List[dict]:
     """
     Check patient medications against a list of target medications.
 
@@ -139,14 +141,14 @@ def check_medications(mrn, csn, medications_to_check: List[str], definitions: Di
 
     try:
         # Get all medication IDs
-        medications_ids = GetMedicationsIds(dataset=DATASET)(inputs=GetMedicationsIdsInput(mrn=mrn, csn=csn))
+        medications_ids = call_tool(GetMedicationsIds(dataset=DATASET), GetMedicationsIdsInput(mrn=mrn, csn=csn), tracker)
 
         # Process each medication
         for medication_id in medications_ids:
             try:
                 # Read medication
-                medication_json_string = ReadMedication(dataset=DATASET)(inputs=ReadMedicationInput(mrn=mrn, csn=csn, order_id=medication_id))
-                medication_dict = json.loads(medication_json_string)
+                medication_result = call_tool(ReadMedication(dataset=DATASET), ReadMedicationInput(mrn=mrn, csn=csn, order_id=medication_id), tracker)
+                medication_dict = medication_result.model_dump()
 
                 # Check if medication name or simple generic name matches any in medications_to_check
                 medication_name = str(medication_dict.get('medication_name', '')).lower()
@@ -187,7 +189,7 @@ def check_medications(mrn, csn, medications_to_check: List[str], definitions: Di
     return output_values
 
 
-def check_diagnoses(mrn, csn, diagnoses_to_check: List[str], definitions: Dict[str, dict]) -> List[dict]:
+def check_diagnoses(mrn, csn, diagnoses_to_check: List[str], definitions: Dict[str, dict], tracker=None) -> List[dict]:
     """
     Check patient diagnoses against positive correlation diagnoses.
 
@@ -198,7 +200,7 @@ def check_diagnoses(mrn, csn, diagnoses_to_check: List[str], definitions: Dict[s
 
     try:
         # Get all diagnosis IDs
-        diagnosis_ids = GetDiagnosisIds(dataset=DATASET)(inputs=GetDiagnosisIdsInput(mrn=mrn, csn=csn))
+        diagnosis_ids = call_tool(GetDiagnosisIds(dataset=DATASET), GetDiagnosisIdsInput(mrn=mrn, csn=csn), tracker)
         print(f"\n=== Diagnosis Information for Patient MRN: {mrn}, CSN: {csn} ===")
         print(f"Total diagnosis IDs found: {len(diagnosis_ids)}")
 
@@ -206,8 +208,8 @@ def check_diagnoses(mrn, csn, diagnoses_to_check: List[str], definitions: Dict[s
         for diagnosis_id in diagnosis_ids:
             try:
                 # Read diagnosis
-                diagnosis_json_string = ReadDiagnosis(dataset=DATASET)(inputs=ReadDiagnosisInput(mrn=mrn, csn=csn, diagnosis_id=diagnosis_id))
-                diagnosis_dict = json.loads(diagnosis_json_string)
+                diagnosis_result = call_tool(ReadDiagnosis(dataset=DATASET), ReadDiagnosisInput(mrn=mrn, csn=csn, diagnosis_id=diagnosis_id), tracker)
+                diagnosis_dict = diagnosis_result.model_dump()
 
                 # Get diagnosis name and convert to lowercase for comparison
                 diagnosis_name = str(diagnosis_dict.get('diagnosis_name', '')).lower()
@@ -244,7 +246,7 @@ def check_diagnoses(mrn, csn, diagnoses_to_check: List[str], definitions: Dict[s
     return output_values
 
 
-def check_flowsheets(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
+def check_flowsheets(mrn, csn, definitions: Dict[str, dict], tracker=None) -> List[dict]:
     """
     Check patient flowsheets for CAPD analysis.
 
@@ -290,12 +292,12 @@ def check_flowsheets(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
                 print(' About to run AnalyzeFlowsheetInstance with inputs:')
 
                 # Run analysis on this instance
-                analysis_result = AnalyzeFlowsheetInstance(dataset=DATASET)(inputs=AnalyzeFlowsheetInstanceInput(
+                analysis_result = call_tool(AnalyzeFlowsheetInstance(dataset=DATASET), AnalyzeFlowsheetInstanceInput(
                     flowsheet_instance=json.dumps(instance),
                     sensory_deficit=sensory_deficit,
                     motor_deficit=motor_deficit,
                     developmental_delay=developmental_delay
-                ))
+                ), tracker)
 
                 # If analysis returns True, create CAPD output value
                 if analysis_result:
@@ -329,7 +331,7 @@ def check_flowsheets(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
     return output_values
 
 
-def analyze_single_note_for_flag(note_text, note_dict, note_id, flag_key, criteria_config, mrn, csn, definitions: Dict[str, dict]):
+def analyze_single_note_for_flag(note_text, note_dict, note_id, flag_key, criteria_config, mrn, csn, definitions: Dict[str, dict], key_name: str, tracker=None):
     """
     Analyze a single note for a specific flag criteria using AnalyzeNoteWithSpanAndReason.
 
@@ -364,9 +366,8 @@ If the criteria are met, extract the exact span of text that supports it and exp
     )
 
     # Use AnalyzeNoteWithSpanAndReason tool
-    result = AnalyzeNoteWithSpanAndReason(dataset=DATASET)(
-        inputs=AnalyzeNoteWithSpanAndReasonInput(note=note_text, prompt=prompt)
-    )
+    result = call_tool(AnalyzeNoteWithSpanAndReason(dataset=DATASET),
+        AnalyzeNoteWithSpanAndReasonInput(note=note_text, prompt=prompt, model=ModelInput(key_name=key_name)), tracker)
 
     print(f"{criteria_name} Analysis: {result.flag_state}")
 
@@ -394,7 +395,7 @@ If the criteria are met, extract the exact span of text that supports it and exp
     )
 
 
-def check_notes(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
+def check_notes(mrn, csn, definitions: Dict[str, dict], key_name: str, tracker=None) -> List[dict]:
     """
     Check patient notes using AnalyzeNoteWithSpanAndReason tool for multiple criteria.
 
@@ -404,7 +405,7 @@ def check_notes(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
 
     try:
         # Get all note IDs
-        note_ids = GetPatientNotesIds(dataset=DATASET)(inputs=GetPatientNotesIdsInput(mrn=mrn, csn=csn))
+        note_ids = call_tool(GetPatientNotesIds(dataset=DATASET), GetPatientNotesIdsInput(mrn=mrn, csn=csn), tracker)
         print(f"\n=== Note Information for Patient MRN: {mrn}, CSN: {csn} ===")
         print(f"Total note IDs found: {len(note_ids)}")
 
@@ -418,8 +419,8 @@ def check_notes(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
                 print(f"\n--- Analyzing Note {i+1}/{len(note_ids)} (ID: {note_id}) ---")
 
                 # Read the note
-                note_json_string = ReadPatientNote(dataset=DATASET)(inputs=ReadPatientNoteInput(mrn=mrn, csn=csn, note_id=note_id))
-                note_dict = json.loads(note_json_string)
+                note_result = call_tool(ReadPatientNote(dataset=DATASET), ReadPatientNoteInput(mrn=mrn, csn=csn, note_id=note_id), tracker)
+                note_dict = note_result.model_dump()
 
                 note_type = note_dict.get('note_type', 'N/A')
                 print(f"Note Type: {note_type}")
@@ -441,7 +442,7 @@ def check_notes(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
                     print(f"\n  --- {criteria_config['name']} ---")
 
                     result = analyze_single_note_for_flag(
-                        note_text, note_dict, note_id, flag_key, criteria_config, mrn, csn, definitions
+                        note_text, note_dict, note_id, flag_key, criteria_config, mrn, csn, definitions, key_name, tracker
                     )
 
                     if result:
@@ -456,7 +457,7 @@ def check_notes(mrn, csn, definitions: Dict[str, dict]) -> List[dict]:
     return output_values
 
 
-def run_workflow(mrn, csn):
+def run_workflow(mrn, csn, key_name: str, tracker=None):
     """
     Run delirium screening workflow on a patient encounter.
 
@@ -465,6 +466,7 @@ def run_workflow(mrn, csn):
     Args:
         mrn: Patient MRN
         csn: Patient CSN
+        key_name: Managed API key name for LLM calls
 
     Returns:
         dict: {
@@ -491,7 +493,7 @@ def run_workflow(mrn, csn):
     # Process medications
     try:
         print('Checking medications...')
-        med_values = check_medications(mrn, csn, MEDICATIONS_TO_CHECK, definitions)
+        med_values = check_medications(mrn, csn, MEDICATIONS_TO_CHECK, definitions, tracker)
         output_values.extend(med_values)
     except Exception as e:
         logger.error(f"Error in medication check for MRN {mrn}, CSN {csn}: {e}")
@@ -499,7 +501,7 @@ def run_workflow(mrn, csn):
     # Process diagnoses
     try:
         print('Checking diagnoses...')
-        diag_values = check_diagnoses(mrn, csn, DIAGNOSES_TO_CHECK, definitions)
+        diag_values = check_diagnoses(mrn, csn, DIAGNOSES_TO_CHECK, definitions, tracker)
         output_values.extend(diag_values)
     except Exception as e:
         logger.error(f"Error in diagnosis check for MRN {mrn}, CSN {csn}: {e}")
@@ -507,7 +509,7 @@ def run_workflow(mrn, csn):
     # Process flowsheets
     try:
         print('Checking flowsheets...')
-        flowsheet_values = check_flowsheets(mrn, csn, definitions)
+        flowsheet_values = check_flowsheets(mrn, csn, definitions, tracker)
         output_values.extend(flowsheet_values)
     except Exception as e:
         logger.error(f"Error in flowsheet check for MRN {mrn}, CSN {csn}: {e}")
@@ -515,7 +517,7 @@ def run_workflow(mrn, csn):
     # Process notes
     try:
         print('Checking notes...')
-        note_values = check_notes(mrn, csn, definitions)
+        note_values = check_notes(mrn, csn, definitions, key_name, tracker)
         output_values.extend(note_values)
     except Exception as e:
         logger.error(f"Error in notes check for MRN {mrn}, CSN {csn}: {e}")

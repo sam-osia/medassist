@@ -58,6 +58,12 @@ class AnthropicProvider(BaseProvider):
                 return {"type": "tool", "name": tool_choice}
         return tool_choice
 
+    def _get_client(self, api_key: Optional[str] = None) -> Anthropic:
+        """Get client - use override api_key if provided, otherwise default."""
+        if api_key:
+            return Anthropic(api_key=api_key)
+        return self.client
+
     def call(
         self,
         model_id: str,
@@ -69,22 +75,25 @@ class AnthropicProvider(BaseProvider):
         tools: Optional[List[ToolDefinition]] = None,
         tool_choice: Union[str, Dict[str, Any]] = "auto",
         stream: bool = False,
+        api_key: Optional[str] = None,
     ) -> Union[ProviderResponse, Generator[ProviderStreamChunk, None, None]]:
         """Unified call method with optional structured output, tools, and streaming."""
+        client = self._get_client(api_key)
+
         if stream:
             return self._call_stream(
-                model_id, messages, system, temperature, max_tokens, schema, tools, tool_choice
+                model_id, messages, system, temperature, max_tokens, schema, tools, tool_choice, client=client
             )
 
         # Non-streaming calls
         if schema and not tools:
-            return self._call_structured(model_id, messages, schema, system, temperature, max_tokens)
+            return self._call_structured(model_id, messages, schema, system, temperature, max_tokens, client=client)
         elif tools:
             return self._call_with_tools(
-                model_id, messages, tools, tool_choice, system, temperature, max_tokens
+                model_id, messages, tools, tool_choice, system, temperature, max_tokens, client=client
             )
         else:
-            return self._call_basic(model_id, messages, system, temperature, max_tokens)
+            return self._call_basic(model_id, messages, system, temperature, max_tokens, client=client)
 
     def _call_basic(
         self,
@@ -93,6 +102,7 @@ class AnthropicProvider(BaseProvider):
         system: Optional[str],
         temperature: float,
         max_tokens: int,
+        client: Optional[Anthropic] = None,
     ) -> ProviderResponse:
         """Make a standard completion call."""
         kwargs: Dict[str, Any] = {
@@ -106,7 +116,8 @@ class AnthropicProvider(BaseProvider):
         if temperature != 1.0:
             kwargs["temperature"] = temperature
 
-        response = self.client.messages.create(**kwargs)
+        client = client or self.client
+        response = client.messages.create(**kwargs)
 
         # Extract text content
         content = ""
@@ -130,6 +141,7 @@ class AnthropicProvider(BaseProvider):
         system: Optional[str],
         temperature: float,
         max_tokens: int,
+        client: Optional[Anthropic] = None,
     ) -> ProviderResponse:
         """Make a structured output call using Anthropic's tool_use pattern."""
         # Define a tool based on the Pydantic schema
@@ -157,7 +169,8 @@ class AnthropicProvider(BaseProvider):
         if temperature != 1.0:
             kwargs["temperature"] = temperature
 
-        response = self.client.messages.create(**kwargs)
+        client = client or self.client
+        response = client.messages.create(**kwargs)
 
         # Extract from tool_use block
         tool_block = next(
@@ -194,6 +207,7 @@ class AnthropicProvider(BaseProvider):
         system: Optional[str],
         temperature: float,
         max_tokens: int,
+        client: Optional[Anthropic] = None,
     ) -> ProviderResponse:
         """Make a call with tool/function calling support."""
         anthropic_tools = self._convert_tools(tools)
@@ -212,7 +226,8 @@ class AnthropicProvider(BaseProvider):
         if temperature != 1.0:
             kwargs["temperature"] = temperature
 
-        response = self.client.messages.create(**kwargs)
+        client = client or self.client
+        response = client.messages.create(**kwargs)
 
         # Extract content and tool calls
         content = ""
@@ -248,6 +263,7 @@ class AnthropicProvider(BaseProvider):
         schema: Optional[Type[BaseModel]],
         tools: Optional[List[ToolDefinition]],
         tool_choice: Union[str, Dict[str, Any]],
+        client: Optional[Anthropic] = None,
     ) -> Generator[ProviderStreamChunk, None, None]:
         """Stream a call, yielding chunks as they arrive."""
         kwargs: Dict[str, Any] = {
@@ -281,7 +297,8 @@ class AnthropicProvider(BaseProvider):
             )
 
         # Use the streaming context manager
-        with self.client.messages.stream(**kwargs) as stream:
+        client = client or self.client
+        with client.messages.stream(**kwargs) as stream:
             accumulated_content = ""
             tool_call_accumulators: Dict[str, Dict[str, Any]] = {}  # id -> {name, input_json}
 

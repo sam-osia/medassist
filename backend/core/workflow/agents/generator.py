@@ -16,8 +16,9 @@ from ..schemas.agent_schemas import GeneratorInput, GeneratorOutput
 class GeneratorAgent(BaseAgent):
     """Creates new workflows based on task description."""
 
-    def __init__(self, dataset: str = None):
+    def __init__(self, dataset: str = None, key_name: str = None):
         self.dataset = dataset
+        self.key_name = key_name
         self._prompt = self._load_prompt()
 
     @property
@@ -67,8 +68,8 @@ Remember: Set prompt fields to null for tools that need them - they will be fill
             ]
 
             result = call(
-                model="gpt-4o",
                 messages=messages,
+                key_name=self.key_name,
                 system=system_prompt,
                 schema=Workflow,
                 temperature=0.7,

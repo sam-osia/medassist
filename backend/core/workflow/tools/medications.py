@@ -1,25 +1,106 @@
 from datetime import datetime
 
-from core.dataloders.datasets_loader import get_dataset_patients
+from pydantic import BaseModel, Field
+
+from core.dataloaders.datasets_loader import get_dataset_patients
 from core.llm_provider import call
-from core.workflow.tools.base import Tool
-from core.workflow.schemas.tool_inputs import (
-    GetMedicationsIdsInput, ReadMedicationInput, HighlightMedicationInput, FilterMedicationInput
-)
+from core.workflow.tools.base import Tool, ToolCallMeta, meta_from_llm_result
+from core.workflow.schemas.tool_inputs import ModelInput
 from core.workflow.schemas.table_schemas import MEDICATION_TABLE_SCHEMA
-from core.workflow.schemas.tool_outputs import ReadMedicationOutput
 import json
 import pandas as pd
 import logging
 import re
 from typing import List, Dict, Any, Optional, Union
-from pydantic import BaseModel
+
 
 logger = logging.getLogger(__name__)
 
+
+# ── Input Models ──────────────────────────────────────────────
+
+class GetMedicationsIdsInput(BaseModel):
+    mrn: int = Field(description="Medical Record Number")
+    csn: int = Field(description="CSN encounter ID")
+
+
+class ReadMedicationInput(BaseModel):
+    mrn: int = Field(description="Medical Record Number")
+    csn: int = Field(description="CSN encounter ID")
+    order_id: int = Field(description="The specific medication order ID to retrieve")
+
+
+class FilterMedicationInput(BaseModel):
+    mrn: int = Field(description="Medical Record Number")
+    csn: int = Field(description="CSN encounter ID")
+    prompt: str = Field(description="The filtering criteria in natural language (e.g., 'Given medications with dosage > 100')")
+    model: Optional[ModelInput] = Field(default=None, description="LLM model selection")
+
+
+class HighlightMedicationInput(BaseModel):
+    medication_name: str = Field(description="The medication to search for.")
+    medications_list: List[str] = Field(description="List of medication names to search within.")
+
+
+# ── Output Models ─────────────────────────────────────────────
+
+class ReadMedicationOutput(BaseModel):
+    order_id: Optional[int] = None
+    admin_line_num: Optional[int] = None
+    pat_id: Optional[str] = None
+    medication_id: Optional[int] = None
+    order_display_name: Optional[str] = None
+    order_datetime: Optional[str] = None
+    order_start_datetime: Optional[str] = None
+    order_end_datetime: Optional[str] = None
+    admin_datetime: Optional[str] = None
+    admin_action: Optional[str] = None
+    drug_code: Optional[str] = None
+    medication_name: Optional[str] = None
+    simple_generic_name: Optional[str] = None
+    dosage_order_amount: Optional[float] = None
+    dosage_order_unit: Optional[str] = None
+    dosage_given_amount: Optional[float] = None
+    dosage_given_unit: Optional[str] = None
+    dosing_bsa: Optional[float] = None
+    dosing_height: Optional[float] = None
+    dosing_weight: Optional[float] = None
+    dosing_frequency: Optional[str] = None
+    medication_route: Optional[str] = None
+    etl_datetime: Optional[str] = None
+
+
+# ── LLM Output Schema (internal) ─────────────────────────────
+
+class FilterMedicationLLMOutput(BaseModel):
+    pandas_expression: str
+    explanation: Optional[str] = None
+
+
+# ── Helper ────────────────────────────────────────────────────
+
+def is_safe_eval_expression(expression: str) -> bool:
+    """Check for dangerous keywords to prevent code injection."""
+    forbidden = {
+        'import', 'os', 'sys', 'rm', 'shutil', 'subprocess', 'open', 'write', 'read',
+        '__builtins__', '__dict__', '__class__', '__base__', '__subclasses__',
+        'eval', 'exec', 'getattr', 'setattr', 'delattr', 'classmethod', 'staticmethod',
+        'property', 'type', 'builtins', 'drop', 'pop', 'inplace', 'clear', 'del'
+    }
+    tokens = re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', expression)
+    for token in tokens:
+        if token in forbidden:
+            return False
+    return True
+
+
+# ── Tool Classes ──────────────────────────────────────────────
+
 class GetMedicationsIds(Tool):
+    Input = GetMedicationsIdsInput
+
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property
@@ -45,47 +126,27 @@ class GetMedicationsIds(Tool):
     @property
     def category(self) -> str:
         return "medications"
-    
-    @property
-    def returns(self) -> dict:
+
+    def _returns_schema(self) -> dict:
         return {
             "type": "array",
-            "items": {
-                "type": "integer"
-            }
+            "items": {"type": "integer"}
         }
-    
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "mrn": {
-                    "type": "integer",
-                    "description": "Medical Record Number"
-                },
-                "csn": {
-                    "type": "integer",
-                    "description": "CSN encounter ID"
-                }
-            },
-            "required": ["mrn", "csn"],
-            "additionalProperties": False
-        }
-    
-    def __call__(self, inputs: GetMedicationsIdsInput) -> List[int]:
-        # Find the patient in the dataset
+
+    def __call__(self, inputs: GetMedicationsIdsInput):
         for patient in self.dataset:
             if patient['mrn'] == inputs.mrn:
-                # Find the specific encounter
                 for encounter in patient['encounters']:
                     if int(encounter['csn']) == int(inputs.csn):
-                        return [med['order_id'] for med in encounter['medications'] if med.get('order_id') is not None]
-        return []
+                        return [med['order_id'] for med in encounter['medications'] if med.get('order_id') is not None], ToolCallMeta()
+        return [], ToolCallMeta()
 
 class ReadMedication(Tool):
+    Input = ReadMedicationInput
+    Output = ReadMedicationOutput
+
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property
@@ -111,78 +172,23 @@ class ReadMedication(Tool):
     @property
     def category(self) -> str:
         return "medications"
-    
-    @property
-    def returns(self) -> dict:
-        return {
-            "type": "object",
-            "properties": {
-                "order_id": {"type": "integer", "description": "Medication order identifier"},
-                "admin_line_num": {"type": "integer", "description": "Administration line number"},
-                "pat_id": {"type": "string", "description": "Patient identifier"},
-                "medication_id": {"type": "integer", "description": "Medication identifier"},
-                "order_display_name": {"type": "string", "description": "Display name for the order"},
-                "order_datetime": {"type": "string", "description": "When the order was placed"},
-                "order_start_datetime": {"type": "string", "description": "Order start time"},
-                "order_end_datetime": {"type": "string", "description": "Order end time"},
-                "admin_datetime": {"type": "string", "description": "Administration time"},
-                "admin_action": {"type": "string", "description": "Administration action (e.g., Given)"},
-                "drug_code": {"type": "string", "description": "Drug code"},
-                "medication_name": {"type": "string", "description": "Full medication name"},
-                "simple_generic_name": {"type": "string", "description": "Simple generic medication name"},
-                "dosage_order_amount": {"type": "number", "description": "Ordered dosage amount"},
-                "dosage_order_unit": {"type": "string", "description": "Ordered dosage unit"},
-                "dosage_given_amount": {"type": "number", "description": "Given dosage amount"},
-                "dosage_given_unit": {"type": "string", "description": "Given dosage unit"},
-                "dosing_bsa": {"type": "number", "description": "Body surface area for dosing"},
-                "dosing_height": {"type": "number", "description": "Height used for dosing"},
-                "dosing_weight": {"type": "number", "description": "Weight used for dosing"},
-                "dosing_frequency": {"type": "string", "description": "Dosing frequency"},
-                "medication_route": {"type": "string", "description": "Route of administration"},
-                "etl_datetime": {"type": "string", "description": "ETL processing timestamp"},
-            },
-            "required": ["order_id"]
-        }
 
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "mrn": {
-                    "type": "integer",
-                    "description": "Medical Record Number"
-                },
-                "csn": {
-                    "type": "integer",
-                    "description": "CSN encounter ID"
-                },
-                "order_id": {
-                    "type": "integer",
-                    "description": "The specific medication order ID to retrieve"
-                }
-            },
-            "required": ["mrn", "csn", "order_id"],
-            "additionalProperties": False
-        }
-
-    def __call__(self, inputs: ReadMedicationInput) -> ReadMedicationOutput:
-        # Find the patient in the dataset
+    def __call__(self, inputs: ReadMedicationInput):
         for patient in self.dataset:
             if patient['mrn'] == inputs.mrn:
-                # Find the specific encounter
                 for encounter in patient['encounters']:
                     if int(encounter['csn']) == int(inputs.csn):
-                        # Find the specific medication
                         for medication in encounter['medications']:
                             if medication.get('order_id') and int(medication['order_id']) == int(inputs.order_id):
-                                return ReadMedicationOutput(**medication)
-        return ReadMedicationOutput()
+                                return ReadMedicationOutput(**medication), ToolCallMeta()
+        return ReadMedicationOutput(), ToolCallMeta()
 
 
 class HighlightMedication(Tool):
+    Input = HighlightMedicationInput
+
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property
@@ -205,61 +211,22 @@ class HighlightMedication(Tool):
     def category(self) -> str:
         return "medications"
 
-    @property
-    def returns(self) -> dict:
+    def _returns_schema(self) -> dict:
         return {
             "type": "string",
             "description": "The medication string if found, otherwise an empty string."
         }
 
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "medication_name": {
-                    "type": "string",
-                    "description": "The medication to search for."
-                },
-                "medications_list": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "description": "List of medication names to search within."
-                }
-            },
-            "required": ["medication_name", "medications_list"],
-            "additionalProperties": False
-        }
-
-    def __call__(self, inputs: HighlightMedicationInput) -> str:
+    def __call__(self, inputs: HighlightMedicationInput):
         if inputs.medication_name in inputs.medications_list:
-            return inputs.medication_name
-        return ""
-
-class FilterMedicationLLMOutput(BaseModel):
-    pandas_expression: str  # The boolean mask expression, e.g., "(df['dosage_order_amount'] > 10) & (df['medication_route'] == 'Oral')"
-    explanation: Optional[str] = None
-
-def is_safe_eval_expression(expression: str) -> bool:
-    """Check for dangerous keywords to prevent code injection."""
-    forbidden = {
-        'import', 'os', 'sys', 'rm', 'shutil', 'subprocess', 'open', 'write', 'read',
-        '__builtins__', '__dict__', '__class__', '__base__', '__subclasses__',
-        'eval', 'exec', 'getattr', 'setattr', 'delattr', 'classmethod', 'staticmethod',
-        'property', 'type', 'builtins', 'drop', 'pop', 'inplace', 'clear', 'del'
-    }
-    # Check for any forbidden words as standalone tokens (basic guard)
-    tokens = re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', expression)
-    for token in tokens:
-        if token in forbidden:
-            return False
-    return True
+            return inputs.medication_name, ToolCallMeta()
+        return "", ToolCallMeta()
 
 class FilterMedication(Tool):
+    Input = FilterMedicationInput
+
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"
         self.dataset = get_dataset_patients(self.dataset_name) or []
         self.last_expression = None
 
@@ -280,6 +247,10 @@ class FilterMedication(Tool):
         return "Filter the medication table based on a natural language prompt and return the order_ids of matching medications."
 
     @property
+    def uses_llm(self) -> bool:
+        return True
+
+    @property
     def input_help(self) -> Dict[str, str]:
         return {
             "prompt": "Enter filtering criteria in natural language (e.g., 'Medications with dosage > 100' or 'Oral medications given today')."
@@ -289,33 +260,14 @@ class FilterMedication(Tool):
     def category(self) -> str:
         return "medications"
 
-    @property
-    def returns(self) -> dict:
+    def _returns_schema(self) -> dict:
         return {
             "type": "array",
             "items": { "type": "integer" },
             "description": "List of order_id values for medications that match the filter criteria."
         }
 
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "mrn": { "type": "integer", "description": "Medical Record Number" },
-                "csn": { "type": "integer", "description": "CSN encounter ID" },
-                "prompt": { "type": "string", "description": "The filtering criteria in natural language (e.g., 'Given medications with dosage > 100')" },
-                "table_schema": { 
-                    "type": "array", 
-                    "items": { "type": "string" },
-                    "description": "The list of column names available in the medication table." 
-                }
-            },
-            "required": ["mrn", "csn", "prompt"],
-            "additionalProperties": False
-        }
-
-    def __call__(self, inputs: FilterMedicationInput) -> List[int]:
+    def __call__(self, inputs: FilterMedicationInput):
         # 1. Fetch Medications for the specific Patient/Encounter
         medications_list = []
         for patient in self.dataset:
@@ -325,25 +277,23 @@ class FilterMedication(Tool):
                         medications_list.extend(encounter.get('medications', []))
                         break
                 break
-        
+
         if not medications_list:
-            return []
+            return [], ToolCallMeta()
 
         # 2. Convert to DataFrame
         df = pd.DataFrame(medications_list)
-        
+
         if df.empty:
-            return []
-        
+            return [], ToolCallMeta()
+
         # 2b. Pre-process Date Columns if they exist
         date_cols = ['order_datetime', 'order_start_datetime', 'order_end_datetime', 'admin_datetime', 'etl_datetime']
         for col in date_cols:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce')
-        
+
         # 3. Static Schema for LLM Context
-        # Use the "Golden Schema" from table_schemas.py to define the context for the LLM.
-        # This ensures the LLM knows about all potential columns even if they aren't in this record.
         metadata_str = "\n".join([f"- {col}" for col in MEDICATION_TABLE_SCHEMA])
 
         # 4. Optimized System Prompt (Structured Filter Model)
@@ -372,36 +322,34 @@ class FilterMedication(Tool):
         try:
             result = call(
                 messages=[{"role": "user", "content": inputs.prompt}],
-                system=system_prompt,
-                schema=FilterMedicationLLMOutput
+                key_name=inputs.model.key_name,
+                system=system_prompt, schema=FilterMedicationLLMOutput,
             )
+            call_meta = meta_from_llm_result(result)
 
             expr = result.parsed.pandas_expression
             self.last_expression = expr
             if not expr:
-                return []
+                return [], call_meta
 
             # 5. Security Guardrail
             if not is_safe_eval_expression(expr):
                 error_msg = f"SECURITY ALERT: Blocked malicious expression: {expr}"
                 print(error_msg)
                 logger.warning(error_msg)
-                return []
+                return [], call_meta
 
             # 6. Execution (Secure eval)
             try:
-                # Jailed environment: no builtins, but allow pd for date conversions if needed
-                # and of course the dataframe 'df'
                 final_mask = eval(expr, {"__builtins__": {}, "pd": pd}, {"df": df})
-                
+
                 if final_mask is None:
-                    return []
+                    return [], call_meta
 
                 result_df = df[final_mask]
-                return [int(oid) for oid in result_df['order_id'].unique().tolist() if oid is not None]
+                return [int(oid) for oid in result_df['order_id'].unique().tolist() if oid is not None], call_meta
 
             except Exception as e:
-                # Detailed logging of execution failure
                 error_msg = (
                     f"FilterMedication execution failed for prompt '{inputs.prompt}':\n"
                     f"Expression: {expr}\n"
@@ -409,11 +357,10 @@ class FilterMedication(Tool):
                 )
                 print(error_msg)
                 logger.error(error_msg)
-                return []
+                return [], call_meta
 
         except Exception as e:
-            # Detailed logging of translation/GPT failure
             error_msg = f"FilterMedication translation failed: {e}"
             print(error_msg)
             logger.error(error_msg)
-            return []
+            return [], ToolCallMeta()

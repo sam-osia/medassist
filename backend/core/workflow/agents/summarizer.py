@@ -21,8 +21,9 @@ class SummaryResponse(BaseModel):
 class SummarizerAgent(BaseAgent):
     """Generates plain English summaries of workflows."""
 
-    def __init__(self, dataset: str = None):
+    def __init__(self, dataset: str = None, key_name: str = None):
         self.dataset = dataset
+        self.key_name = key_name
         self._prompt = self._load_prompt()
 
     @property
@@ -61,8 +62,8 @@ Generate a clear, concise summary of this workflow."""
             ]
 
             result = call(
-                model="gpt-4o",
                 messages=messages,
+                key_name=self.key_name,
                 system=system_prompt,
                 schema=SummaryResponse,
                 temperature=0.7,

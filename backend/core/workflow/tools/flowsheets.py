@@ -1,18 +1,41 @@
 import sys
 
-from core.dataloders.datasets_loader import get_dataset_patients
-from core.llm_provider import call
-from core.workflow.tools.base import Tool
-from core.workflow.schemas.tool_inputs import (
-    ReadFlowsheetsTableInput, SummarizeFlowsheetsTableInput, AnalyzeFlowsheetInstanceInput
-)
-import json
-from typing import Dict, Any
+from pydantic import BaseModel, Field
 
+from core.dataloaders.datasets_loader import get_dataset_patients
+from core.llm_provider import call
+from core.workflow.tools.base import Tool, ToolCallMeta, meta_from_llm_result
+from core.workflow.schemas.tool_inputs import ModelInput
+import json
+from typing import Dict, Any, Optional
+
+
+# ── Input Models ──────────────────────────────────────────────
+
+class ReadFlowsheetsTableInput(BaseModel):
+    mrn: int = Field(description="Medical Record Number")
+    csn: int = Field(description="CSN encounter ID")
+
+
+class SummarizeFlowsheetsTableInput(BaseModel):
+    flowsheets_table: str = Field(description="JSON string containing the table of flowsheets")
+    model: Optional[ModelInput] = Field(default=None, description="LLM model selection")
+
+
+class AnalyzeFlowsheetInstanceInput(BaseModel):
+    flowsheet_instance: str = Field(description="JSON string containing a single flowsheet instance with timestamp and measurements")
+    sensory_deficit: bool = Field(default=False, description="Whether patient has sensory deficit (lowers threshold to 6)")
+    motor_deficit: bool = Field(default=False, description="Whether patient has motor deficit (lowers threshold to 6)")
+    developmental_delay: bool = Field(default=False, description="Whether patient has developmental delay (lowers threshold to 6)")
+
+
+# ── Tool Classes ──────────────────────────────────────────────
 
 class ReadFlowsheetsTable(Tool):
+    Input = ReadFlowsheetsTableInput
+
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property
@@ -39,44 +62,27 @@ class ReadFlowsheetsTable(Tool):
     def category(self) -> str:
         return "flowsheets"
 
-    @property
-    def returns(self) -> dict:
+    def _returns_schema(self) -> dict:
         return {
             "type": "string",
             "description": "JSON string containing the flowsheets pivot table for the specified patient encounter."
         }
 
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "mrn": {
-                    "type": "integer",
-                    "description": "Medical Record Number"
-                },
-                "csn": {
-                    "type": "integer",
-                    "description": "CSN encounter ID"
-                }
-            },
-            "required": ["mrn", "csn"],
-            "additionalProperties": False
-        }
-    
-    def __call__(self, inputs: ReadFlowsheetsTableInput) -> str:
+    def __call__(self, inputs: ReadFlowsheetsTableInput):
         # Find the patient in the dataset
         for patient in self.dataset:
             if patient['mrn'] == inputs.mrn:
                 # Find the specific encounter
                 for encounter in patient['encounters']:
                     if int(encounter['csn']) == int(inputs.csn):
-                        return json.dumps(encounter.get('flowsheets_pivot', []))
-        return "[]"
+                        return json.dumps(encounter.get('flowsheets_pivot', [])), ToolCallMeta()
+        return "[]", ToolCallMeta()
 
 class SummarizeFlowsheetsTable(Tool):
+    Input = SummarizeFlowsheetsTableInput
+
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property
@@ -92,6 +98,10 @@ class SummarizeFlowsheetsTable(Tool):
         return "Summarize Flowsheets Table"
 
     @property
+    def uses_llm(self) -> bool:
+        return True
+
+    @property
     def user_description(self) -> str:
         return "Summarize the table of flowsheets in a clear and concise manner."
 
@@ -99,28 +109,13 @@ class SummarizeFlowsheetsTable(Tool):
     def category(self) -> str:
         return "flowsheets"
 
-    @property
-    def returns(self) -> dict:
+    def _returns_schema(self) -> dict:
         return {
             "type": "string",
             "description": "A concise natural-language summary of the flowsheets data provided."
         }
 
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "flowsheets_table": {
-                    "type": "string",
-                    "description": "JSON string containing the table of flowsheets"
-                }
-            },
-            "required": ["flowsheets_table"],
-            "additionalProperties": False
-        }
-    
-    def __call__(self, inputs: SummarizeFlowsheetsTableInput) -> str:
+    def __call__(self, inputs: SummarizeFlowsheetsTableInput):
         system_prompt = """
         You are a helpful medical assistant that analyzes flowsheets data.
         Your task is to summarize the flowsheets table in a clear and concise manner.
@@ -138,12 +133,15 @@ class SummarizeFlowsheetsTable(Tool):
         """
 
         messages = [{"role": "user", "content": user_prompt}]
-        result = call(messages=messages, system=system_prompt)
-        return result.content
+        result = call(messages=messages, key_name=inputs.model.key_name,
+                      system=system_prompt)
+        return result.content, meta_from_llm_result(result)
 
 class AnalyzeFlowsheetInstance(Tool):
+    Input = AnalyzeFlowsheetInstanceInput
+
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property
@@ -166,53 +164,23 @@ class AnalyzeFlowsheetInstance(Tool):
     def category(self) -> str:
         return "flowsheets"
 
-    @property
-    def returns(self) -> dict:
+    def _returns_schema(self) -> dict:
         return {
             "type": "boolean",
             "description": "True if CAPD total score meets or exceeds threshold, False otherwise."
         }
 
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "flowsheet_instance": {
-                    "type": "string",
-                    "description": "JSON string containing a single flowsheet instance with timestamp and measurements"
-                },
-                "sensory_deficit": {
-                    "type": "boolean",
-                    "description": "Whether patient has sensory deficit (lowers threshold to 6)",
-                    "default": False
-                },
-                "motor_deficit": {
-                    "type": "boolean", 
-                    "description": "Whether patient has motor deficit (lowers threshold to 6)",
-                    "default": False
-                },
-                "developmental_delay": {
-                    "type": "boolean",
-                    "description": "Whether patient has developmental delay (lowers threshold to 6)", 
-                    "default": False
-                }
-            },
-            "required": ["flowsheet_instance"],
-            "additionalProperties": False
-        }
-    
-    def __call__(self, inputs: AnalyzeFlowsheetInstanceInput) -> bool:
+    def __call__(self, inputs: AnalyzeFlowsheetInstanceInput):
         print('flowsheet inputs:')
         print(inputs)
         try:
             instance = json.loads(inputs.flowsheet_instance)
         except json.JSONDecodeError:
-            return False
-        
+            return False, ToolCallMeta()
+
         # Determine threshold based on patient conditions
         threshold = 6 if (inputs.sensory_deficit or inputs.motor_deficit or inputs.developmental_delay) else 9
-        
+
         # Look for CAPD total score in measurements
         measurements = instance.get('measurements', {})
 
@@ -221,9 +189,9 @@ class AnalyzeFlowsheetInstance(Tool):
             if flo_meas_name == 'SK IP R CAPD TOTAL SCORE':
                 try:
                     score = float(measurement_data.get('value', 0))
-                    return score >= threshold
+                    return score >= threshold, ToolCallMeta()
                 except (ValueError, TypeError):
-                    return False
-        
+                    return False, ToolCallMeta()
+
         # If CAPD total score not found, return False
-        return False
+        return False, ToolCallMeta()

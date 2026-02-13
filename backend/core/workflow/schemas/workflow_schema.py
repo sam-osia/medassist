@@ -2,13 +2,22 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Literal, Union, Annotated
 from pydantic import BaseModel, Field, ConfigDict
 from core.workflow.schemas.output_schemas import OutputDefinition
-from core.workflow.schemas.tool_inputs import (
+
+# Input models are now colocated in tool files
+from core.workflow.tools.notes import (
     GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput,
-    AnalyzeNoteWithSpanAndReasonInput,
-    ReadFlowsheetsTableInput, SummarizeFlowsheetsTableInput, GetMedicationsIdsInput,
-    ReadMedicationInput, FilterMedicationInput, HighlightMedicationInput,
-    GetDiagnosisIdsInput, ReadDiagnosisInput, HighlightDiagnosisInput,
-    SemanticKeywordCountInput, ExactKeywordCountInput, AnalyzeFlowsheetInstanceInput,
+    AnalyzeNoteWithSpanAndReasonInput, SemanticKeywordCountInput, ExactKeywordCountInput
+)
+from core.workflow.tools.flowsheets import (
+    ReadFlowsheetsTableInput, SummarizeFlowsheetsTableInput, AnalyzeFlowsheetInstanceInput
+)
+from core.workflow.tools.medications import (
+    GetMedicationsIdsInput, ReadMedicationInput, FilterMedicationInput, HighlightMedicationInput
+)
+from core.workflow.tools.diagnosis import (
+    GetDiagnosisIdsInput, ReadDiagnosisInput, HighlightDiagnosisInput
+)
+from core.workflow.tools.variable_management import (
     InitStoreInput, StoreAppendInput, StoreReadInput, BuildTextInput
 )
 

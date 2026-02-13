@@ -176,6 +176,12 @@ class GoogleProvider(BaseProvider):
             raw_response=response,
         )
 
+    def _get_client(self, api_key: Optional[str] = None):
+        """Get client - use override api_key if provided, otherwise default."""
+        if api_key:
+            return genai.Client(api_key=api_key)
+        return self.client
+
     def call(
         self,
         model_id: str,
@@ -187,8 +193,11 @@ class GoogleProvider(BaseProvider):
         tools: Optional[List[ToolDefinition]] = None,
         tool_choice: Union[str, Dict[str, Any]] = "auto",
         stream: bool = False,
+        api_key: Optional[str] = None,
     ) -> Union[ProviderResponse, Generator[ProviderStreamChunk, None, None]]:
         """Unified call method with optional structured output, tools, and streaming."""
+        client = self._get_client(api_key)
+
         # Convert inputs
         contents = self._convert_messages(messages)
         gemini_tools = self._convert_tools(tools) if tools else None
@@ -205,10 +214,10 @@ class GoogleProvider(BaseProvider):
         )
 
         if stream:
-            return self._call_stream(model_id, contents, config, schema)
+            return self._call_stream(model_id, contents, config, schema, client=client)
 
         # Non-streaming call
-        response = self.client.models.generate_content(
+        response = client.models.generate_content(
             model=model_id,
             contents=contents,
             config=config,
@@ -222,9 +231,11 @@ class GoogleProvider(BaseProvider):
         contents: List[Any],
         config: Any,
         schema: Optional[Type[BaseModel]],
+        client=None,
     ) -> Generator[ProviderStreamChunk, None, None]:
         """Stream a call, yielding chunks as they arrive."""
-        response_stream = self.client.models.generate_content_stream(
+        client = client or self.client
+        response_stream = client.models.generate_content_stream(
             model=model_id,
             contents=contents,
             config=config,

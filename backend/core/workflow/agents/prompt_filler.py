@@ -31,8 +31,9 @@ class FilledPrompt(BaseModel):
 class PromptFillerAgent(BaseAgent):
     """Fills in null prompt fields based on user intent and tool context."""
 
-    def __init__(self, dataset: str = None):
+    def __init__(self, dataset: str = None, key_name: str = None):
         self.dataset = dataset
+        self.key_name = key_name
         self._prompt = self._load_prompt()
 
     @property
@@ -164,8 +165,8 @@ Generate a prompt that aligns with the user's intent and the tool's purpose."""
             ]
 
             result = call(
-                model="gpt-4o",
                 messages=messages,
+                key_name=self.key_name,
                 system=system_prompt,
                 schema=FilledPrompt,
                 temperature=0.7,

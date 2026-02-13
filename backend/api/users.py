@@ -4,7 +4,7 @@ import logging
 import binascii
 import datetime
 
-from core.dataloders import user_loader, datasets_loader, projects_loader, workflow_def_loader
+from core.dataloaders import user_loader, datasets_loader, projects_loader, workflow_def_loader
 from core.auth import auth_service, permissions
 from .dependencies import get_admin_user, get_current_user
 

@@ -10,3 +10,4 @@ export { default as NumberInput } from './NumberInput';
 export { default as BooleanInput } from './BooleanInput';
 export { default as EnumInput } from './EnumInput';
 export { default as PromptInput } from './PromptInput';
+export { default as ModelInput } from './ModelInput';

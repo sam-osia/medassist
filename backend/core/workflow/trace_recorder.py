@@ -9,7 +9,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from core.dataloders.conversation_loader import save_trace
+from core.dataloaders.conversation_loader import save_trace
 
 logger = logging.getLogger(__name__)
 

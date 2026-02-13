@@ -30,6 +30,7 @@ import {
 import { workflowBuilderService } from '../../../services/ApiService';
 import { getStepDisplayConfig } from './StepDisplayConfig';
 import PromptDialog from '../Prompt/PromptDialog';
+import { ModelInput } from '../Toolkit/shared/inputs';
 
 const getStepConfig = (theme) => ({
   tool: {
@@ -545,6 +546,41 @@ const StepTertiary = ({ step, expanded, onPromptEdit }) => {
                     value={value}
                     maxLength={displayConfig.maxLength || 100}
                   />
+                ) : displayConfig.display === 'model-picker' ? (
+                  // Model picker display: show selected model with inline picker
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary', fontFamily: 'monospace' }}>
+                      • {key}:
+                    </Typography>
+                    <Box sx={{ minWidth: 200 }}>
+                      <ModelInput
+                        name="model"
+                        value={value}
+                        onChange={(newValue) => {
+                          if (onPromptEdit) {
+                            // We reuse onPromptEdit pattern but for model field
+                            // The parent will need to handle this by updating the step's model field
+                          }
+                        }}
+                        disabled={false}
+                      />
+                    </Box>
+                  </Box>
+                ) : displayConfig.display === 'model-picker-empty' ? (
+                  // Model not set
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Typography variant="body2" sx={{ fontSize: '0.75rem', color: 'text.secondary', fontFamily: 'monospace' }}>
+                      • {key}:
+                    </Typography>
+                    <Box sx={{ minWidth: 200 }}>
+                      <ModelInput
+                        name="model"
+                        value={null}
+                        onChange={() => {}}
+                        disabled={false}
+                      />
+                    </Box>
+                  </Box>
                 ) : displayConfig.display === 'prompt-icon' ? (
                   // Prompt icon display: clickable icon to view prompt
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>

@@ -25,6 +25,7 @@ import ProjectDatasetTab from '../components/UI/Projects/ProjectsPage/ProjectDat
 import ProjectAnnotationsTab from '../components/UI/Projects/ProjectsPage/ProjectAnnotationsTab';
 import ProjectWorkflowResultsTab from '../components/UI/Projects/ProjectsPage/ProjectWorkflowResultsTab';
 import ProjectEvaluationsTab from '../components/UI/Projects/ProjectsPage/ProjectEvaluationsTab';
+import ProjectFinancialsTab from '../components/UI/Projects/ProjectsPage/ProjectFinancialsTab';
 import CreateProjectDialog from '../components/UI/Projects/CreateProjectDialog';
 import BreadcrumbNav from '../components/UI/Common/BreadcrumbNav';
 import { useAuth } from '../contexts/AuthProvider';
@@ -145,6 +146,7 @@ const IndividualProjectPage = () => {
                   <Tab label="Annotations" />
                   <Tab label="Workflows" />
                   <Tab label="Evaluations" />
+                  <Tab label="Financials" />
                 </Tabs>
               </Box>
 
@@ -155,6 +157,7 @@ const IndividualProjectPage = () => {
                 {tabValue === 2 && <ProjectAnnotationsTab project={project} />}
                 {tabValue === 3 && <ProjectWorkflowResultsTab project={project} />}
                 {tabValue === 4 && <ProjectEvaluationsTab project={project} />}
+                {tabValue === 5 && <ProjectFinancialsTab project={project} />}
               </Box>
             </Paper>
 

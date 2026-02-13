@@ -1,23 +1,90 @@
 import sys
 
-from core.dataloders.datasets_loader import get_dataset_patients
+from pydantic import BaseModel, Field
+
+from core.dataloaders.datasets_loader import get_dataset_patients
 from core.llm_provider import call
-from core.workflow.tools.base import Tool
-from core.workflow.schemas.tool_inputs import (
-    GetPatientNotesIdsInput, ReadPatientNoteInput, SummarizePatientNoteInput,
-    SemanticKeywordCountInput, ExactKeywordCountInput, AnalyzeNoteWithSpanAndReasonInput
-)
-from core.workflow.schemas.tool_outputs import (
-    SemanticKeywordCountOutput, ExactKeywordCountOutput, AnalyzeNoteWithSpanAndReasonOutput,
-    ReadPatientNoteOutput)
+from core.workflow.tools.base import Tool, ToolCallMeta, meta_from_llm_result
+from core.workflow.schemas.tool_inputs import PromptInput, ExamplePair, ModelInput
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Union
 from jinja2 import Template
 
 
+# ── Input Models ──────────────────────────────────────────────
+
+class GetPatientNotesIdsInput(BaseModel):
+    mrn: int = Field(description="Medical Record Number")
+    csn: int = Field(description="CSN encounter ID")
+
+
+class ReadPatientNoteInput(BaseModel):
+    mrn: int = Field(description="Medical Record Number")
+    csn: int = Field(description="CSN encounter ID")
+    note_id: Union[int, str] = Field(description="The specific note ID to retrieve")
+
+
+class SummarizePatientNoteInput(BaseModel):
+    note: str = Field(description="The full patient note text to analyze")
+    criteria: Optional[str] = Field(default=None, description="The specific criteria or aspects to focus on in the summary")
+    model: Optional[ModelInput] = Field(default=None, description="LLM model selection")
+
+
+class AnalyzeNoteWithSpanAndReasonInput(BaseModel):
+    note: str = Field(description="The full patient note text to analyze")
+    prompt: Optional[PromptInput] = Field(default=None, description="Custom prompt configuration for the LLM call")
+    model: Optional[ModelInput] = Field(default=None, description="LLM model selection")
+
+
+class SemanticKeywordCountInput(BaseModel):
+    text: str = Field(description="The text to count the keywords in")
+    keywords: List[str] = Field(description="List of keywords to search for in the text")
+    model: Optional[ModelInput] = Field(default=None, description="LLM model selection")
+
+
+class ExactKeywordCountInput(BaseModel):
+    text: str = Field(description="The text to search for keywords")
+    keywords: List[str] = Field(description="List of keywords to count")
+
+
+# ── Output Models ─────────────────────────────────────────────
+
+class ReadPatientNoteOutput(BaseModel):
+    note_id: Optional[int] = None
+    pat_id: Optional[str] = None
+    note_type_id: Optional[int] = None
+    note_type: Optional[str] = None
+    note_status: Optional[str] = None
+    service: Optional[str] = None
+    author: Optional[str] = None
+    create_datetime: Optional[str] = None
+    filing_datetime: Optional[str] = None
+    note_text: Optional[str] = None
+    etl_datetime: Optional[str] = None
+
+
+class AnalyzeNoteWithSpanAndReasonOutput(BaseModel):
+    flag_state: bool
+    span: str
+    reasoning: str
+
+
+class SemanticKeywordCountOutput(BaseModel):
+    count: int
+    formatted_text: str
+
+
+class ExactKeywordCountOutput(BaseModel):
+    counts: Dict[str, int]
+
+
+# ── Tool Classes ──────────────────────────────────────────────
+
 class GetPatientNotesIds(Tool):
+    Input = GetPatientNotesIdsInput
+
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property
@@ -43,47 +110,27 @@ class GetPatientNotesIds(Tool):
     @property
     def category(self) -> str:
         return "notes"
-    
-    @property
-    def returns(self) -> dict:
+
+    def _returns_schema(self) -> dict:
         return {
             "type": "array",
-            "items": {
-                "type": "integer"
-            }
+            "items": {"type": "integer"}
         }
-    
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "mrn": {
-                    "type": "integer",
-                    "description": "Medical Record Number"
-                },
-                "csn": {
-                    "type": "integer",
-                    "description": "CSN encounter ID"
-                }
-            },
-            "required": ["mrn", "csn"],
-            "additionalProperties": False
-        }
-    
-    def __call__(self, inputs: GetPatientNotesIdsInput) -> List[int]:
-        # Find the patient in the dataset
+
+    def __call__(self, inputs: GetPatientNotesIdsInput):
         for patient in self.dataset:
             if patient['mrn'] == inputs.mrn:
-                # Find the specific encounter
                 for encounter in patient['encounters']:
                     if int(encounter['csn']) == int(inputs.csn):
-                        return [note['note_id'] for note in encounter['notes']]
-        return []
+                        return [note['note_id'] for note in encounter['notes']], ToolCallMeta()
+        return [], ToolCallMeta()
 
 class ReadPatientNote(Tool):
+    Input = ReadPatientNoteInput
+    Output = ReadPatientNoteOutput
+
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property
@@ -109,70 +156,31 @@ class ReadPatientNote(Tool):
     @property
     def category(self) -> str:
         return "notes"
-    
-    @property
-    def returns(self) -> dict:
-        return {
-            "type": "object",
-            "properties": {
-                "note_id": {"type": "integer", "description": "Unique note identifier"},
-                "pat_id": {"type": "string", "description": "Patient identifier"},
-                "note_type_id": {"type": "integer", "description": "Note type identifier"},
-                "note_type": {"type": "string", "description": "Type of note (e.g., nursing, progress)"},
-                "note_status": {"type": "string", "description": "Status of the note"},
-                "service": {"type": "string", "description": "Service that created the note"},
-                "author": {"type": "string", "description": "Author of the note"},
-                "create_datetime": {"type": "string", "description": "When the note was created"},
-                "filing_datetime": {"type": "string", "description": "When the note was filed"},
-                "note_text": {"type": "string", "description": "Full text content of the note"},
-                "etl_datetime": {"type": "string", "description": "ETL processing timestamp"},
-            },
-            "required": ["note_id"]
-        }
 
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "mrn": {
-                    "type": "integer",
-                    "description": "Medical Record Number"
-                },
-                "csn": {
-                    "type": "integer",
-                    "description": "CSN encounter ID"
-                },
-                "note_id": {
-                    "type": "integer",
-                    "description": "The specific note ID to retrieve"
-                }
-            },
-            "required": ["mrn", "csn", "note_id"],
-            "additionalProperties": False
-        }
-
-    def __call__(self, inputs: ReadPatientNoteInput) -> ReadPatientNoteOutput:
-        # Find the patient in the dataset
+    def __call__(self, inputs: ReadPatientNoteInput):
         for patient in self.dataset:
             if patient['mrn'] == inputs.mrn:
-                # Find the specific encounter
                 for encounter in patient['encounters']:
                     if int(encounter['csn']) == int(inputs.csn):
-                        # Find the specific note
                         for note in encounter['notes']:
                             if int(note['note_id']) == int(inputs.note_id):
-                                return ReadPatientNoteOutput(**note)
-        return ReadPatientNoteOutput()
+                                return ReadPatientNoteOutput(**note), ToolCallMeta()
+        return ReadPatientNoteOutput(), ToolCallMeta()
 
 class SummarizePatientNote(Tool):
+    Input = SummarizePatientNoteInput
+
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property
     def name(self) -> str:
         return "summarize_patient_note"
+
+    @property
+    def uses_llm(self) -> bool:
+        return True
 
     @property
     def description(self) -> str:
@@ -190,47 +198,28 @@ class SummarizePatientNote(Tool):
     def category(self) -> str:
         return "notes"
 
-    @property
-    def returns(self) -> dict:
+    def _returns_schema(self) -> dict:
         return {
             "type": "string",
             "description": "A concise summary of the patient note based on the given criteria"
         }
-    
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "note": {
-                    "type": "string",
-                    "description": "The full patient note text to analyze"
-                },
-                "criteria": {
-                    "type": "string",
-                    "description": "The specific criteria or aspects to focus on in the summary"
-                }
-            },
-            "required": ["note"],
-            "additionalProperties": False
-        }
-    
-    def __call__(self, inputs: SummarizePatientNoteInput) -> str:
+
+    def __call__(self, inputs: SummarizePatientNoteInput):
         system_prompt = """
         You are a helpful medical assistant that analyzes patient notes.
         You are given the patient note and its metadata from the database.
         Your task is to summarize the note given a criteria.
         The criteria defines the information you need to extract from the note.
-        For example, if the criteria is "mental health", you need to summarize the 
+        For example, if the criteria is "mental health", you need to summarize the
         note in a way that emphasizes the mental health aspects of the note.
         Although we are looking for a specific criteria, you should not limit your
-        analysis to the criteria. You should analyze the note in a way that is 
+        analysis to the criteria. You should analyze the note in a way that is
         consistent with the note's content and metadata.
         You should return the summary in a clear and concise manner.
         The output should contain only the summary, no other text.
 
-        You are not forced to use the criteria. You should analyze the note in a way that is 
-        consistent with the note's content and metadata. You should not limit your analysis to the criteria, 
+        You are not forced to use the criteria. You should analyze the note in a way that is
+        consistent with the note's content and metadata. You should not limit your analysis to the criteria,
         but text that is relevant to the criteria should be emphasized.
         """
 
@@ -244,14 +233,18 @@ class SummarizePatientNote(Tool):
         """
 
         messages = [{"role": "user", "content": user_prompt}]
-        result = call(messages=messages, system=system_prompt)
-        return result.content
+        result = call(messages=messages, key_name=inputs.model.key_name,
+                      system=system_prompt)
+        return result.content, meta_from_llm_result(result)
 
 
 
 class AnalyzeNoteWithSpanAndReason(Tool):
+    Input = AnalyzeNoteWithSpanAndReasonInput
+    Output = AnalyzeNoteWithSpanAndReasonOutput
+
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property
@@ -271,6 +264,10 @@ class AnalyzeNoteWithSpanAndReason(Tool):
         return "Analyze a patient note, detect a criteria and extract portions of the text relevant to the criteria, with additional reasoning"
 
     @property
+    def uses_llm(self) -> bool:
+        return True
+
+    @property
     def input_help(self) -> Dict[str, str]:
         return {
             "prompt": "Configure the system and user prompts. Use Jinja2 template variables like {{note}} to reference input fields."
@@ -280,69 +277,7 @@ class AnalyzeNoteWithSpanAndReason(Tool):
     def category(self) -> str:
         return "notes"
 
-    @property
-    def returns(self) -> dict:
-        return {
-            "type": "object",
-            "properties": {
-                "flag_state": {
-                    "type": "boolean",
-                    "description": "True if the flag criteria are met, False otherwise"
-                },
-                "span": {
-                    "type": "string",
-                    "description": "The portion of the text that caused the model to set the flag_state to True. Empty if flag_state is false."
-                },
-                "reasoning": {
-                    "type": "string",
-                    "description": "The reasoning that caused the model to set the flag_state to True. Empty if flag_state is false."
-                }
-            },
-            "required": ["flag_state", "span", "reasoning"]
-        }
-
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "note": {
-                    "type": "string",
-                    "description": "The full patient note text to analyze"
-                },
-                "prompt": {
-                    "type": "object",
-                    "description": "Custom prompt configuration for the LLM call",
-                    "properties": {
-                        "system_prompt": {
-                            "type": "string",
-                            "description": "System prompt for the LLM"
-                        },
-                        "user_prompt": {
-                            "type": "string",
-                            "description": "User prompt template for the LLM"
-                        },
-                        "examples": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "user_input": {"type": "string"},
-                                    "assistant_response": {"type": "string"}
-                                },
-                                "required": ["user_input", "assistant_response"]
-                            },
-                            "description": "Optional few-shot examples"
-                        }
-                    },
-                    "required": ["system_prompt", "user_prompt"]
-                }
-            },
-            "required": ["note", "prompt"],
-            "additionalProperties": False
-        }
-
-    def __call__(self, inputs: AnalyzeNoteWithSpanAndReasonInput) -> AnalyzeNoteWithSpanAndReasonOutput:
+    def __call__(self, inputs: AnalyzeNoteWithSpanAndReasonInput):
         # Build template context from inputs
         context = {
             'note': inputs.note,
@@ -368,11 +303,10 @@ class AnalyzeNoteWithSpanAndReason(Tool):
 
         try:
             result = call(
-                messages=messages,
-                system=system_prompt,
-                schema=AnalyzeNoteWithSpanAndReasonOutput
+                messages=messages, key_name=inputs.model.key_name,
+                system=system_prompt, schema=self.Output,
             )
-            return result.parsed
+            return result.parsed, meta_from_llm_result(result)
         except Exception as e:
             # Fallback if structured output fails
             print(f"Structured output failed: {e}")
@@ -380,12 +314,15 @@ class AnalyzeNoteWithSpanAndReason(Tool):
                 flag_state=False,
                 span='',
                 reasoning=f"Structured output failed: {e}",
-            )
+            ), ToolCallMeta()
 
 
 class SemanticKeywordCount(Tool):
+    Input = SemanticKeywordCountInput
+    Output = SemanticKeywordCountOutput
+
     def __init__(self, dataset: str = None):
-        self.dataset_name = dataset or "sickkids_icu"  # Default dataset
+        self.dataset_name = dataset or "sickkids_icu"
         self.dataset = get_dataset_patients(self.dataset_name) or []
 
     @property
@@ -401,52 +338,18 @@ class SemanticKeywordCount(Tool):
         return "Semantic Keyword Count"
 
     @property
+    def uses_llm(self) -> bool:
+        return True
+
+    @property
     def user_description(self) -> str:
         return "Use LLM to analyze text and count keywords semantically (synonyms, negation handling), returning structured output with counts and formatted text."
 
     @property
     def category(self) -> str:
         return "notes"
-    
-    @property
-    def returns(self) -> dict:
-        return {
-            "type": "object",
-            "properties": {
-                "count": {
-                    "type": "integer",
-                    "description": "Total count of all keywords found in the text"
-                },
-                "formatted_text": {
-                    "type": "string",
-                    "description": "Text with keywords highlighted or formatted"
-                }
-            },
-            "required": ["count", "formatted_text"]
-        }
-    
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "text": {
-                    "type": "string",
-                    "description": "The text to count the keywords in"
-                },
-                "keywords": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "description": "List of keywords to search for in the text"
-                }
-            },
-            "required": ["text", "keywords"],
-            "additionalProperties": False
-        }
-    
-    def __call__(self, inputs: SemanticKeywordCountInput) -> SemanticKeywordCountOutput:
+
+    def __call__(self, inputs: SemanticKeywordCountInput):
         system_prompt = """
     You are a text analysis assistant. Your task is to detect semantic occurrences of specified keywords in a text.
 
@@ -500,20 +403,23 @@ class SemanticKeywordCount(Tool):
         try:
             result = call(
                 messages=[{"role": "user", "content": user_prompt}],
-                system=system_prompt,
-                schema=SemanticKeywordCountOutput
+                key_name=inputs.model.key_name,
+                system=system_prompt, schema=self.Output,
             )
-            return result.parsed
+            return result.parsed, meta_from_llm_result(result)
         except Exception as e:
             # Fallback if structured output fails
             print(f"Structured output failed: {e}")
             return SemanticKeywordCountOutput(
                 count=0,
                 formatted_text=inputs.text
-            )
+            ), ToolCallMeta()
 
 
 class ExactKeywordCount(Tool):
+    Input = ExactKeywordCountInput
+    Output = ExactKeywordCountOutput
+
     def __init__(self, dataset: str = None):
         self.dataset_name = dataset or "sickkids_icu"
         self.dataset = get_dataset_patients(self.dataset_name) or []
@@ -538,43 +444,9 @@ class ExactKeywordCount(Tool):
     def category(self) -> str:
         return "notes"
 
-    @property
-    def returns(self) -> dict:
-        return {
-            "type": "object",
-            "properties": {
-                "counts": {
-                    "type": "object",
-                    "additionalProperties": {"type": "integer"},
-                    "description": "Dictionary mapping each keyword to its count"
-                }
-            },
-            "required": ["counts"]
-        }
-
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "text": {
-                    "type": "string",
-                    "description": "The text to search for keywords"
-                },
-                "keywords": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "List of keywords to count"
-                }
-            },
-            "required": ["text", "keywords"],
-            "additionalProperties": False
-        }
-
-    def __call__(self, inputs: ExactKeywordCountInput) -> ExactKeywordCountOutput:
+    def __call__(self, inputs: ExactKeywordCountInput):
         counts = {}
         text_lower = inputs.text.lower()
         for keyword in inputs.keywords:
             counts[keyword] = text_lower.count(keyword.lower())
-        return ExactKeywordCountOutput(counts=counts)
-
+        return ExactKeywordCountOutput(counts=counts), ToolCallMeta()

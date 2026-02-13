@@ -8,15 +8,15 @@ import datetime
 import shutil
 import copy
 
-from core.dataloders.projects_loader import get_project, project_exists
-from core.dataloders.datasets_loader import get_patient_dataset_summary, get_patient_details
-from core.dataloders.workflow_def_loader import (
+from core.dataloaders.projects_loader import get_project, project_exists
+from core.dataloaders.datasets_loader import get_patient_dataset_summary, get_patient_details
+from core.dataloaders.workflow_def_loader import (
     get_workflow_def, save_workflow_def, list_workflow_defs,
     delete_workflow_def, workflow_def_exists
 )
 from core.deprecated.planning.plan_supervisor_agent import conversational_planning_agent
 from core.auth import permissions
-from core.dataloders.experiment_loader import (
+from core.dataloaders.experiment_loader import (
     get_all_experiments,
     get_experiment_details,
     get_experiments_for_project,
@@ -25,6 +25,7 @@ from core.dataloders.experiment_loader import (
 )
 from core.workflow_service.run_workflow_delirium import run_workflow as run_workflow_delirium
 from core.workflow_service.run_workflow_sdoh import run_workflow as run_workflow_sdoh
+from core.workflow_service.utils import CostTracker
 from core.workflow.schemas.tool_inputs import PromptInput
 from .dependencies import get_current_user
 
@@ -413,7 +414,10 @@ def _process_experiment_in_background(
     patients: list,
     prompts: list,
     dataset_name: str,
-    current_user: str
+    current_user: str,
+    key_name: str,
+    project_name: str = None,
+    workflow_name: str = None,
 ):
     """
     Background task to process experiment patients.
@@ -429,6 +433,8 @@ def _process_experiment_in_background(
         processed_count = 0
         error_count = 0
         total_flags = 0
+        aggregate_tracker = CostTracker()
+        per_patient_costs = {}
 
         for patient_summary in patients:
             mrn = patient_summary.get("mrn")
@@ -456,7 +462,10 @@ def _process_experiment_in_background(
                 csn = first_encounter.get("csn")
 
                 # Run workflow on this patient's first encounter
-                result = run_workflow_sdoh(mrn, csn, prompts)
+                patient_tracker = CostTracker()
+                result = run_workflow_sdoh(mrn, csn, prompts, key_name, patient_tracker)
+                aggregate_tracker.merge(patient_tracker)
+                per_patient_costs[str(mrn)] = patient_tracker.summary()
 
                 # Result now contains: {mrn, csn, output_definitions, output_values}
                 patient_result = result
@@ -499,6 +508,32 @@ def _process_experiment_in_background(
                         "errors": errors
                     })
                 continue
+
+        # Write cost summary to results.json
+        try:
+            results_path = os.path.join(EXPERIMENTS_DIR, experiment_name, "results.json")
+            with open(results_path, 'r') as f:
+                data = json.load(f)
+            cost_summary = aggregate_tracker.summary()
+            cost_summary["per_patient"] = per_patient_costs
+            data["cost_summary"] = cost_summary
+            with open(results_path, 'w') as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            logger.error(f"Error writing cost summary for {experiment_name}: {e}")
+
+        # Append billing entry to project ledger
+        if project_name:
+            try:
+                from core.dataloaders.billing_loader import append_billing_entry
+                append_billing_entry(
+                    project_name=project_name,
+                    experiment_name=experiment_name,
+                    workflow_name=workflow_name or "",
+                    cost_summary=cost_summary,
+                )
+            except Exception as e:
+                logger.error(f"Error appending billing for {experiment_name}: {e}")
 
         # Determine final status
         if error_count > 0 and processed_count == 0:
@@ -545,11 +580,12 @@ def create_experiment(
         project_name = data.get("project_name")
         experiment_name = data.get("experiment_name")
         workflow_name = data.get("workflow_name", "Delirium_v1")
+        key_name = data.get("key_name")
 
-        if not all([project_name, experiment_name]):
+        if not all([project_name, experiment_name, key_name]):
             raise HTTPException(
                 status_code=400,
-                detail="Missing required fields: project_name, experiment_name"
+                detail="Missing required fields: project_name, experiment_name, key_name"
             )
 
         # Validate project exists
@@ -657,7 +693,10 @@ def create_experiment(
             patients=patients,
             prompts=prompts,
             dataset_name=dataset_name,
-            current_user=current_user
+            current_user=current_user,
+            key_name=key_name,
+            project_name=project_name,
+            workflow_name=workflow_name,
         )
 
         logger.info(f"Queued experiment {experiment_name} for processing with {len(patients)} patients")

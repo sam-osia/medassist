@@ -27,7 +27,7 @@ import {
   Save as SaveIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
-import { workflowBuilderService, conversationService, workflowAgentService } from '../services/ApiService';
+import { workflowBuilderService, conversationService, workflowAgentService, apiKeysService } from '../services/ApiService';
 import StepComponent from '../components/UI/Workflow/StepComponent';
 import WorkflowMessageCard from '../components/UI/Workflow/WorkflowMessageCard';
 import ConversationSidebar from '../components/UI/Workflow/ConversationSidebar';
@@ -153,10 +153,17 @@ const WorkflowAgentPage = () => {
   // Selected workflow state - tracks which workflow is currently displayed
   const [selectedWorkflowId, setSelectedWorkflowId] = useState(null);
 
+  // Model selection state
+  const [availableKeys, setAvailableKeys] = useState([]);
+  const [selectedKeyName, setSelectedKeyName] = useState(null);
+
   // Load saved workflows and conversations on component mount
   useEffect(() => {
     fetchSavedWorkflows();
     fetchConversations();
+    apiKeysService.getMyKeys()
+      .then(res => setAvailableKeys(res.data.keys || []))
+      .catch(() => setAvailableKeys([]));
   }, []);
 
   // Clear success messages after 3 seconds
@@ -363,7 +370,8 @@ const WorkflowAgentPage = () => {
         currentConversationId,
         0,  // mrn
         0,  // csn
-        null  // dataset
+        null,  // dataset
+        selectedKeyName  // model selection
       );
 
       if (!response.ok) {
@@ -676,7 +684,8 @@ const WorkflowAgentPage = () => {
         conversationId,
         0,  // mrn
         0,  // csn
-        null  // dataset
+        null,  // dataset
+        selectedKeyName  // model selection
       );
 
       if (!response.ok) {
@@ -900,7 +909,28 @@ const WorkflowAgentPage = () => {
                     </Button>
                   </Box>
                 </Box>
-                
+
+                {availableKeys.length > 0 && (
+                  <FormControl fullWidth size="small" sx={{ mt: 1 }}>
+                    <InputLabel>Model</InputLabel>
+                    <Select
+                      value={selectedKeyName || ''}
+                      label="Model"
+                      onChange={(e) => setSelectedKeyName(e.target.value || null)}
+                      disabled={loading}
+                    >
+                      <MenuItem value="">
+                        <em>Default (GPT-4o)</em>
+                      </MenuItem>
+                      {availableKeys.map(k => (
+                        <MenuItem key={k.key_name} value={k.key_name}>
+                          {k.key_name} ({k.model_name})
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
+
                 {saveSuccess && (
                   <Alert severity="success" sx={{ mt: 3 }}>
                     Workflow saved successfully!
@@ -1061,6 +1091,29 @@ const WorkflowAgentPage = () => {
                       })}
                     </Box>
                     
+                    {/* Model Selector */}
+                    {availableKeys.length > 0 && (
+                      <Box sx={{ mb: 1 }}>
+                        <Select
+                          value={selectedKeyName || ''}
+                          onChange={(e) => setSelectedKeyName(e.target.value || null)}
+                          disabled={awaitingResponse}
+                          displayEmpty
+                          size="small"
+                          sx={{ fontSize: '0.8rem', height: 32, minWidth: 200 }}
+                        >
+                          <MenuItem value="">
+                            <em>Default (GPT-4o)</em>
+                          </MenuItem>
+                          {availableKeys.map(k => (
+                            <MenuItem key={k.key_name} value={k.key_name}>
+                              {k.key_name} ({k.model_name})
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </Box>
+                    )}
+
                     {/* Chat Input */}
                     <Box component="form" onSubmit={handleSendMessage}>
                       <Box sx={{ position: 'relative' }}>

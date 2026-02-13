@@ -12,9 +12,6 @@ from .providers.anthropic_provider import AnthropicProvider
 from .providers.google_provider import GoogleProvider
 
 
-# Default model when none specified
-DEFAULT_MODEL = "gpt-4o"
-
 # Singleton provider instances (lazy initialized)
 _providers: Dict[str, BaseProvider] = {}
 
@@ -35,7 +32,7 @@ def _get_provider(name: str) -> BaseProvider:
 
 def call(
     messages: List[Dict[str, str]],
-    model: str = DEFAULT_MODEL,
+    key_name: str,
     system: Optional[str] = None,
     temperature: float = 1.0,
     max_tokens: int = 8192,
@@ -46,9 +43,12 @@ def call(
 ) -> Union[LLMResult, Generator[StreamChunk, None, LLMResult]]:
     """Unified LLM call with optional structured output, tools, and streaming.
 
+    All LLM calls are identified by a managed key_name which resolves to
+    the model, API key, and key identity for cost tracking.
+
     Args:
         messages: List of messages in OpenAI format [{"role": "user", "content": "..."}]
-        model: Friendly model name (default: "gpt-4o"). Options: "gpt-4o", "claude-sonnet", "gemini-2.0-flash", etc.
+        key_name: Managed API key name (required). Resolves to model, API key, and identity.
         system: Optional system prompt
         temperature: Sampling temperature (0.0 - 2.0)
         max_tokens: Maximum tokens in response (default: 8192)
@@ -61,30 +61,18 @@ def call(
         LLMResult for non-streaming calls, or Generator[StreamChunk] for streaming
 
     Raises:
-        ValueError: If model doesn't support requested features
-
-    Example:
-        >>> # Basic call
-        >>> result = call(model="gpt-4o", messages=[{"role": "user", "content": "Hello!"}])
-        >>> print(result.content)
-
-        >>> # Structured output
-        >>> class Person(BaseModel):
-        ...     name: str
-        ...     age: int
-        >>> result = call(model="gpt-4o", messages=[...], schema=Person)
-        >>> print(result.parsed.name)
-
-        >>> # Tool calling
-        >>> tools = [ToolDefinition(name="get_time", description="...", parameters={...})]
-        >>> result = call(model="gpt-4o", messages=[...], tools=tools)
-        >>> if result.has_tool_calls:
-        ...     print(result.tool_calls)
-
-        >>> # Streaming
-        >>> for chunk in call(model="gpt-4o", messages=[...], stream=True):
-        ...     print(chunk.content, end="")
+        ValueError: If key_name not found or model doesn't support requested features
     """
+    # Resolve managed API key
+    from core.dataloaders.api_key_loader import get_key_by_name
+    key_record = get_key_by_name(key_name)
+    if not key_record:
+        raise ValueError(f"API key '{key_name}' not found")
+    model = key_record["model_name"]
+    api_key = key_record["api_key"]
+    resolved_key_name = key_record["key_name"]
+    resolved_key_id = key_record["key_id"]
+
     config = get_model(model)
 
     # Capability checks
@@ -100,7 +88,7 @@ def call(
     if stream:
         return _stream_wrapper(
             provider, config, model, messages, system, temperature, max_tokens,
-            schema, tools, tool_choice
+            schema, tools, tool_choice, api_key, resolved_key_name, resolved_key_id
         )
 
     # Non-streaming call
@@ -114,6 +102,7 @@ def call(
         tools=tools,
         tool_choice=tool_choice,
         stream=False,
+        api_key=api_key,
     )
 
     cost = calculate_cost(response.input_tokens, response.output_tokens, config)
@@ -128,6 +117,8 @@ def call(
         cost=cost,
         tool_calls=response.tool_calls,
         raw_response=response.raw_response,
+        api_key_name=resolved_key_name,
+        api_key_id=resolved_key_id,
     )
 
 
@@ -142,6 +133,9 @@ def _stream_wrapper(
     schema: Optional[Type[BaseModel]],
     tools: Optional[List[ToolDefinition]],
     tool_choice: str,
+    api_key: str,
+    resolved_key_name: str,
+    resolved_key_id: str,
 ) -> Generator[StreamChunk, None, LLMResult]:
     """Wrapper that yields StreamChunks and returns final LLMResult."""
     accumulated_content = ""
@@ -159,6 +153,7 @@ def _stream_wrapper(
         tools=tools,
         tool_choice=tool_choice,
         stream=True,
+        api_key=api_key,
     )
 
     for chunk in stream:
@@ -198,77 +193,6 @@ def _stream_wrapper(
         cost=cost,
         tool_calls=final_tool_calls,
         raw_response=None,  # Not available in streaming
-    )
-
-
-# ============================================================================
-# DEPRECATED: Keep for backward compatibility
-# ============================================================================
-
-def call_structured(
-    model: str,
-    messages: List[Dict[str, str]],
-    schema: Type[BaseModel],
-    system: Optional[str] = None,
-    temperature: float = 1.0,
-    max_tokens: int = 8192,
-) -> LLMResult:
-    """DEPRECATED: Use call() with schema parameter instead.
-
-    Make a structured output LLM call.
-
-    Args:
-        model: Friendly model name
-        messages: List of messages
-        schema: Pydantic model class for response structure
-        system: Optional system prompt
-        temperature: Sampling temperature
-        max_tokens: Maximum tokens in response (default: 8192)
-
-    Returns:
-        LLMResult with .parsed containing the Pydantic model instance
-    """
-    return call(
-        model=model,
-        messages=messages,
-        system=system,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        schema=schema,
-    )
-
-
-def call_with_tools(
-    model: str,
-    messages: List[Dict[str, str]],
-    tools: List[ToolDefinition],
-    system: Optional[str] = None,
-    temperature: float = 1.0,
-    max_tokens: int = 8192,
-    tool_choice: Union[str, Dict[str, Any]] = "auto",
-) -> LLMResult:
-    """DEPRECATED: Use call() with tools parameter instead.
-
-    Make an LLM call with tool/function calling support.
-
-    Args:
-        model: Friendly model name
-        messages: List of messages
-        tools: List of ToolDefinition objects defining available tools
-        system: Optional system prompt
-        temperature: Sampling temperature
-        max_tokens: Maximum tokens in response (default: 8192)
-        tool_choice: Tool selection mode
-
-    Returns:
-        LLMResult with .tool_calls if the model wants to call tools
-    """
-    return call(
-        model=model,
-        messages=messages,
-        system=system,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        tools=tools,
-        tool_choice=tool_choice,
+        api_key_name=resolved_key_name,
+        api_key_id=resolved_key_id,
     )

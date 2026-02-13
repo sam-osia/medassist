@@ -1,5 +1,6 @@
 """Tool specification helpers for workflow agents."""
 
+import copy
 from typing import Dict, Any, List
 
 from core.workflow.tools.notes import (
@@ -72,9 +73,15 @@ def get_tool_specs_for_agents(dataset: str = None) -> Dict[str, Any]:
     specs = {}
 
     for tool in tools:
+        # Deep-copy parameters and strip model field (user-only, not for agents)
+        params = copy.deepcopy(tool.parameters)
+        params.get("properties", {}).pop("model", None)
+        if "required" in params:
+            params["required"] = [r for r in params["required"] if r != "model"]
+
         specs[tool.name] = {
             "description": tool.description,
-            "parameters": tool.parameters,
+            "parameters": params,
             "returns": tool.returns,
         }
 

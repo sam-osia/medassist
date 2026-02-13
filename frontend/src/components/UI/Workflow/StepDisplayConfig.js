@@ -40,6 +40,14 @@ export function getStepDisplayConfig(toolName, fieldName, fieldValue) {
     return { display: 'prompt-icon' };
   }
 
-  // 3. Default fallback: plain text
+  // 3. Detect model objects
+  if (fieldName === 'model' && typeof fieldValue === 'object' && fieldValue !== null) {
+    return { display: 'model-picker' };
+  }
+  if (fieldName === 'model' && fieldValue === null) {
+    return { display: 'model-picker-empty' };
+  }
+
+  // 4. Default fallback: plain text
   return { display: 'text' };
 }

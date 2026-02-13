@@ -4,8 +4,8 @@ import logging
 import copy
 
 from core.deprecated.planning.plan_supervisor_agent import conversational_planning_agent
-from core.dataloders.workflow_def_loader import save_workflow_def, get_workflow_def, list_workflow_defs, delete_workflow_def, workflow_def_exists
-from core.dataloders.conversation_loader import (
+from core.dataloaders.workflow_def_loader import save_workflow_def, get_workflow_def, list_workflow_defs, delete_workflow_def, workflow_def_exists
+from core.dataloaders.conversation_loader import (
     save_conversation, get_conversation, list_conversations,
     delete_conversation, conversation_exists
 )

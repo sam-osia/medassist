@@ -2,20 +2,12 @@
 Tool Registry
 -------------
 
-A minimal adapter that discovers existing Tool classes and exposes a
-schema-driven catalog for the frontend to generate input forms.
+Discovers existing Tool classes and exposes a schema-driven catalog
+for the frontend to generate input forms.
 
-For proof of concept, each catalog entry includes only the fields
-necessary to render a form:
-- name
-- category
-- description
-- input_schema (JSON Schema)
-
-Where possible, input_schema is generated from the authoritative
-Pydantic input model for each tool. If a tool does not have a mapped
-input model, the registry falls back to the tool's own `parameters`
-definition.
+Each tool class defines its own Input (and optionally Output) Pydantic
+models. The registry reads tool.Input / tool.Output directly — no
+manual mapping dicts needed.
 """
 
 from __future__ import annotations
@@ -58,41 +50,6 @@ from core.workflow.tools.variable_management import (
     BuildText,
 )
 
-# Authoritative Pydantic input models for schema generation
-from core.workflow.schemas.tool_inputs import (
-    GetPatientNotesIdsInput,
-    ReadPatientNoteInput,
-    SummarizePatientNoteInput,
-    SemanticKeywordCountInput,
-    ExactKeywordCountInput,
-    ReadFlowsheetsTableInput,
-    SummarizeFlowsheetsTableInput,
-    AnalyzeFlowsheetInstanceInput,
-    GetMedicationsIdsInput,
-    ReadMedicationInput,
-    GetDiagnosisIdsInput,
-    ReadDiagnosisInput,
-    AnalyzeNoteWithSpanAndReasonInput,
-    FilterMedicationInput,
-    HighlightMedicationInput,
-    HighlightDiagnosisInput,
-    InitStoreInput,
-    StoreAppendInput,
-    StoreReadInput,
-    BuildTextInput,
-)
-
-# Authoritative Pydantic output models for schema generation
-from core.workflow.schemas.tool_outputs import (
-    SemanticKeywordCountOutput,
-    ExactKeywordCountOutput,
-    AnalyzeNoteWithSpanAndReasonOutput,
-    FilterMedicationOutput,
-    ReadPatientNoteOutput,
-    ReadMedicationOutput,
-    ReadDiagnosisOutput,
-)
-
 
 # -----------------------------
 # Internal module state (cache)
@@ -100,60 +57,6 @@ from core.workflow.schemas.tool_outputs import (
 _TOOLS_BY_NAME: Dict[str, Tool] = {}
 _METADATA_BY_NAME: Dict[str, Dict[str, Any]] = {}
 _LAST_UPDATED: Optional[str] = None
-
-
-def _pydantic_input_model_map() -> Dict[str, type[BaseModel]]:
-    """Map tool names to their Pydantic input model classes.
-
-    This mirrors/centralizes the mapping used elsewhere (e.g., supervisor).
-    """
-    return {
-        # Notes
-        "get_patient_notes_ids": GetPatientNotesIdsInput,
-        "read_patient_note": ReadPatientNoteInput,
-        "summarize_patient_note": SummarizePatientNoteInput,
-        "semantic_keyword_count": SemanticKeywordCountInput,
-        "exact_keyword_count": ExactKeywordCountInput,
-        "analyze_note_with_span_and_reason": AnalyzeNoteWithSpanAndReasonInput,
-
-        # Flowsheets
-        "read_flowsheets_table": ReadFlowsheetsTableInput,
-        "summarize_flowsheets_table": SummarizeFlowsheetsTableInput,
-        "analyze_flowsheet_instance": AnalyzeFlowsheetInstanceInput,
-
-        # Medications
-        "get_medications_ids": GetMedicationsIdsInput,
-        "read_medication": ReadMedicationInput,
-        "filter_medication": FilterMedicationInput,
-        "highlight_medication": HighlightMedicationInput,
-
-        # Diagnosis
-        "get_diagnosis_ids": GetDiagnosisIdsInput,
-        "read_diagnosis": ReadDiagnosisInput,
-        "highlight_diagnosis": HighlightDiagnosisInput,
-
-        # Variable Management
-        "init_store": InitStoreInput,
-        "store_append": StoreAppendInput,
-        "store_read": StoreReadInput,
-        "build_text": BuildTextInput,
-    }
-
-
-def _pydantic_output_model_map() -> Dict[str, type[BaseModel]]:
-    """Map tool names to their Pydantic output model classes.
-
-    Only tools with structured outputs are mapped here.
-    """
-    return {
-        "semantic_keyword_count": SemanticKeywordCountOutput,
-        "exact_keyword_count": ExactKeywordCountOutput,
-        "analyze_note_with_span_and_reason": AnalyzeNoteWithSpanAndReasonOutput,
-        "filter_medication": FilterMedicationOutput,
-        "read_patient_note": ReadPatientNoteOutput,
-        "read_medication": ReadMedicationOutput,
-        "read_diagnosis": ReadDiagnosisOutput,
-    }
 
 
 def _instantiate_all_tools() -> List[Tool]:
@@ -195,104 +98,54 @@ def _instantiate_all_tools() -> List[Tool]:
 
 
 def _build_input_schema(tool: Tool) -> Dict[str, Any]:
-    """Return JSON Schema for the tool's inputs.
-
-    Preference order:
-    1) Pydantic input model (authoritative)
-    2) Tool.parameters fallback (already JSON-Schema-like)
-    """
-    model_map = _pydantic_input_model_map()
-    model_cls = model_map.get(tool.name)
-
-    if model_cls is not None and issubclass(model_cls, BaseModel):
-        try:
-            # Pydantic v2
-            schema = model_cls.model_json_schema()
-            # Ensure we present the schema with type=object at the root for form generation
-            if schema.get("type") != "object":
-                schema = {
-                    "type": "object",
-                    "properties": schema.get("properties", {}),
-                    "required": schema.get("required", []),
-                    "additionalProperties": schema.get("additionalProperties", False),
-                    "title": schema.get("title", model_cls.__name__),
-                    "description": schema.get("description", ""),
-                }
-            return schema
-        except Exception:
-            # Fall through to tool.parameters if schema generation fails
-            pass
-
-    # Fallback to the tool's declared parameters
+    """Return JSON Schema for the tool's inputs (auto-derived from tool.Input)."""
     try:
-        params = tool.parameters  # type: ignore[attr-defined]
-        # Expecting JSON Schema object
-        if isinstance(params, dict) and params.get("type") == "object":
-            return params
+        schema = tool.Input.model_json_schema()
+        if schema.get("type") != "object":
+            schema = {
+                "type": "object",
+                "properties": schema.get("properties", {}),
+                "required": schema.get("required", []),
+                "additionalProperties": schema.get("additionalProperties", False),
+                "title": schema.get("title", tool.Input.__name__),
+                "description": schema.get("description", ""),
+            }
+        return schema
     except Exception:
-        pass
-
-    # Last resort: minimal empty object schema
-    return {
-        "type": "object",
-        "properties": {},
-        "required": [],
-        "additionalProperties": False,
-    }
+        return {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
 
 
 def _build_output_schema(tool: Tool) -> Dict[str, Any]:
-    """Return JSON Schema for the tool's outputs.
-
-    Preference order:
-    1) Pydantic output model (authoritative)
-    2) Tool.returns fallback (already JSON-Schema-like)
-    """
-    model_map = _pydantic_output_model_map()
-    model_cls = model_map.get(tool.name)
-
-    if model_cls is not None and issubclass(model_cls, BaseModel):
+    """Return JSON Schema for the tool's outputs (auto-derived from tool.Output or tool.returns)."""
+    if tool.Output is not None:
         try:
-            # Pydantic v2
-            schema = model_cls.model_json_schema()
-            # Ensure we present the schema with type=object at the root
+            schema = tool.Output.model_json_schema()
             if schema.get("type") != "object":
                 schema = {
                     "type": "object",
                     "properties": schema.get("properties", {}),
                     "required": schema.get("required", []),
                     "additionalProperties": schema.get("additionalProperties", False),
-                    "title": schema.get("title", model_cls.__name__),
+                    "title": schema.get("title", tool.Output.__name__),
                     "description": schema.get("description", ""),
                 }
             return schema
         except Exception:
-            # Fall through to tool.returns if schema generation fails
             pass
 
-    # Fallback to the tool's declared returns
+    # Fallback to _returns_schema() (for tools returning primitives)
     try:
-        returns = tool.returns  # type: ignore[attr-defined]
-        # Expecting JSON Schema object
+        returns = tool.returns
         if isinstance(returns, dict):
             return returns
     except Exception:
         pass
 
-    # Last resort: generic object schema
-    return {
-        "type": "object",
-        "properties": {},
-        "required": [],
-        "additionalProperties": False,
-    }
+    return {"type": "object", "properties": {}, "required": [], "additionalProperties": False}
 
 
 def discover(refresh: bool = False) -> None:
-    """Discover tools and build the minimal metadata catalog.
-
-    Populates internal caches used by the public accessors below.
-    """
+    """Discover tools and build the minimal metadata catalog."""
     global _TOOLS_BY_NAME, _METADATA_BY_NAME, _LAST_UPDATED
 
     if _TOOLS_BY_NAME and _METADATA_BY_NAME and not refresh:
@@ -314,6 +167,7 @@ def discover(refresh: bool = False) -> None:
             "output_schema": _build_output_schema(tool),
             "input_help": getattr(tool, "input_help", {}),
             "role": getattr(tool, "role", "compute"),
+            "uses_llm": getattr(tool, "uses_llm", False),
         }
 
     _LAST_UPDATED = datetime.utcnow().isoformat()
@@ -354,4 +208,3 @@ def get_catalog() -> Dict[str, Any]:
         "tools": items,
         "last_updated": _LAST_UPDATED,
     }
-

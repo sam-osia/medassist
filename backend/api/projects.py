@@ -1,16 +1,16 @@
 from fastapi import APIRouter, HTTPException, Body, Depends
-from typing import Dict, Any, List
+from typing import Dict, Any
 import logging
 
-from core.dataloders.projects_loader import (
+from core.dataloaders.projects_loader import (
     save_project,
     get_project,
     list_projects,
     delete_project,
     project_exists
 )
-from core.dataloders import datasets_loader
-from core.dataloders import user_loader
+from core.dataloaders import datasets_loader
+from core.dataloaders import user_loader
 from core.auth import permissions
 
 from .dependencies import get_current_user
@@ -272,4 +272,24 @@ def delete_project_endpoint(project_name: str, current_user: str = Depends(get_c
         raise
     except Exception as e:
         logger.error(f"Error in delete_project_endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.get("/{project_name}/billing")
+def get_project_billing(project_name: str, current_user: str = Depends(get_current_user)) -> Dict[str, Any]:
+    """Get billing/financial data for a project."""
+    try:
+        project_data = get_project(project_name, current_user)
+        if not project_data:
+            raise HTTPException(status_code=404, detail=f"Project '{project_name}' not found")
+
+        from core.dataloaders.billing_loader import get_billing
+        billing = get_billing(project_name)
+
+        return {"status": "success", "project_name": project_name, **billing}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_project_billing: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

@@ -67,6 +67,12 @@ class OpenAIProvider(BaseProvider):
             return {"type": "function", "function": {"name": tool_choice}}
         return tool_choice
 
+    def _get_client(self, api_key: Optional[str] = None) -> OpenAI:
+        """Get client - use override api_key if provided, otherwise default."""
+        if api_key:
+            return OpenAI(api_key=api_key)
+        return self.client
+
     def call(
         self,
         model_id: str,
@@ -78,24 +84,26 @@ class OpenAIProvider(BaseProvider):
         tools: Optional[List[ToolDefinition]] = None,
         tool_choice: Union[str, Dict[str, Any]] = "auto",
         stream: bool = False,
+        api_key: Optional[str] = None,
     ) -> Union[ProviderResponse, Generator[ProviderStreamChunk, None, None]]:
         """Unified call method with optional structured output, tools, and streaming."""
         full_messages = self._build_messages(messages, system)
+        client = self._get_client(api_key)
 
         if stream:
             return self._call_stream(
-                model_id, full_messages, temperature, max_tokens, schema, tools, tool_choice
+                model_id, full_messages, temperature, max_tokens, schema, tools, tool_choice, client=client
             )
 
         # Non-streaming calls
         if schema and not tools:
-            return self._call_structured(model_id, full_messages, schema, temperature, max_tokens)
+            return self._call_structured(model_id, full_messages, schema, temperature, max_tokens, client=client)
         elif tools:
             return self._call_with_tools(
-                model_id, full_messages, tools, tool_choice, temperature, max_tokens
+                model_id, full_messages, tools, tool_choice, temperature, max_tokens, client=client
             )
         else:
-            return self._call_basic(model_id, full_messages, temperature, max_tokens)
+            return self._call_basic(model_id, full_messages, temperature, max_tokens, client=client)
 
     def _call_basic(
         self,
@@ -103,9 +111,11 @@ class OpenAIProvider(BaseProvider):
         messages: List[Dict[str, str]],
         temperature: float,
         max_tokens: int,
+        client: Optional[OpenAI] = None,
     ) -> ProviderResponse:
         """Make a basic completion call."""
-        response = self.client.chat.completions.create(
+        client = client or self.client
+        response = client.chat.completions.create(
             model=model_id,
             messages=messages,
             temperature=temperature,
@@ -126,9 +136,11 @@ class OpenAIProvider(BaseProvider):
         schema: Type[BaseModel],
         temperature: float,
         max_tokens: int,
+        client: Optional[OpenAI] = None,
     ) -> ProviderResponse:
         """Make a structured output call using OpenAI's native parsing."""
-        response = self.client.beta.chat.completions.parse(
+        client = client or self.client
+        response = client.beta.chat.completions.parse(
             model=model_id,
             messages=messages,
             response_format=schema,
@@ -154,12 +166,14 @@ class OpenAIProvider(BaseProvider):
         tool_choice: Union[str, Dict[str, Any]],
         temperature: float,
         max_tokens: int,
+        client: Optional[OpenAI] = None,
     ) -> ProviderResponse:
         """Make a call with tool/function calling support."""
+        client = client or self.client
         openai_tools = self._convert_tools(tools)
         openai_tool_choice = self._convert_tool_choice(tool_choice)
 
-        response = self.client.chat.completions.create(
+        response = client.chat.completions.create(
             model=model_id,
             messages=messages,
             tools=openai_tools,
@@ -200,6 +214,7 @@ class OpenAIProvider(BaseProvider):
         schema: Optional[Type[BaseModel]],
         tools: Optional[List[ToolDefinition]],
         tool_choice: Union[str, Dict[str, Any]],
+        client: Optional[OpenAI] = None,
     ) -> Generator[ProviderStreamChunk, None, None]:
         """Stream a call, yielding chunks as they arrive."""
         kwargs: Dict[str, Any] = {
@@ -230,7 +245,8 @@ class OpenAIProvider(BaseProvider):
                 }
                 kwargs["messages"] = messages
 
-        response = self.client.chat.completions.create(**kwargs)
+        client = client or self.client
+        response = client.chat.completions.create(**kwargs)
 
         accumulated_content = ""
         # Track tool calls by index: {index: {"id": str, "name": str, "arguments": str}}

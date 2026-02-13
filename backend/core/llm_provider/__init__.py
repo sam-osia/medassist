@@ -3,16 +3,14 @@
 This library provides a consistent interface for making LLM calls across
 multiple providers (OpenAI, Anthropic, Google).
 
-Main Functions:
-    - call(): Standard completion call
-    - call_structured(): Structured output with Pydantic models
-    - call_with_tools(): Function/tool calling support
+All calls require a managed key_name which resolves to the model,
+API credentials, and key identity for cost tracking.
 
 Example Usage:
-    >>> from core.llm_provider import call, call_structured, call_with_tools, ToolDefinition
+    >>> from core.llm_provider import call, ToolDefinition
     >>>
     >>> # Simple call
-    >>> result = call(model="gpt-4o", messages=[{"role": "user", "content": "Hello!"}])
+    >>> result = call(messages=[{"role": "user", "content": "Hello!"}], key_name="my-key")
     >>> print(result.content)
     >>>
     >>> # Structured output
@@ -20,18 +18,18 @@ Example Usage:
     >>> class Person(BaseModel):
     ...     name: str
     ...     age: int
-    >>> result = call_structured(model="gpt-4o", messages=[...], schema=Person)
+    >>> result = call(messages=[...], key_name="my-key", schema=Person)
     >>> print(result.parsed.name)
     >>>
     >>> # Tool calling
     >>> tools = [ToolDefinition(name="get_time", description="...", parameters={...})]
-    >>> result = call_with_tools(model="gpt-4o", messages=[...], tools=tools)
+    >>> result = call(messages=[...], key_name="my-key", tools=tools)
     >>> if result.has_tool_calls:
     ...     for tc in result.tool_calls:
     ...         print(tc.name, tc.arguments)
 """
 
-from .client import call, call_structured, call_with_tools, DEFAULT_MODEL
+from .client import call
 from .result import LLMResult, ToolCall, ToolResult, StreamChunk
 from .registry import (
     MODELS,
@@ -45,11 +43,8 @@ from .registry import (
 from .providers.base import ToolDefinition
 
 __all__ = [
-    # Main functions
+    # Main function
     "call",
-    "call_structured",
-    "call_with_tools",
-    "DEFAULT_MODEL",
     # Result types
     "LLMResult",
     "ToolCall",
